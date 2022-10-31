@@ -39,6 +39,14 @@ Additionally, new packages have been introduced in order to further split the co
 * `authz.NewMsgGrant` `expiration` is now a pointer. When `nil` is used, then no expiration will be set (grant won't expire).
 * `authz.NewGrant` takes a new argument: block time, to correctly validate expire time.
 
+### gRPC
+
+A new gRPC service, `proto/cosmos/base/node/v1beta1/query.proto`, has been introduced
+which exposes various operator configuration. App developers should be sure to
+register the service with the gRPC-gateway service via
+`nodeservice.RegisterGRPCGatewayRoutes` in their application construction, which
+is typically found in `RegisterAPIRoutes`.
+
 ### Keyring
 
 The keyring has been refactored in v0.46.
@@ -97,4 +105,4 @@ The `third_party/proto` folder that existed in [previous version](https://github
 
 Instead, the SDK uses [`buf`](https://buf.build). Clients should have their own [`buf.yaml`](https://docs.buf.build/configuration/v1/buf-yaml) with `buf.build/cosmos/cosmos-sdk` as dependency, in order to avoid having to copy paste these files.
 
-The protos can as well be downloaded using `buf export buf.build/cosmos/cosmos-sdk:$(curl -sS https://api.github.com/repos/cosmos/cosmos-sdk/commits/v0.46.0 | jq -r .sha) --output <some_folder>`.
+The protos can as well be downloaded using `buf export buf.build/cosmos/cosmos-sdk:8cb30a2c4de74dc9bd8d260b1e75e176 --output <some_folder>`.

@@ -3,7 +3,7 @@ package network
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -103,11 +103,12 @@ func startInProcess(cfg Config, val *Validator) error {
 		val.ClientCtx = val.ClientCtx.
 			WithClient(val.RPCClient)
 
-		// Add the tx service in the gRPC router.
 		app.RegisterTxService(val.ClientCtx)
-
-		// Add the tendermint queries service in the gRPC router.
 		app.RegisterTendermintService(val.ClientCtx)
+
+		if a, ok := app.(srvtypes.ApplicationQueryService); ok {
+			a.RegisterNodeService(val.ClientCtx)
+		}
 	}
 
 	if val.APIAddress != "" {
@@ -226,7 +227,7 @@ func initGenFiles(cfg Config, genAccounts []authtypes.GenesisAccount, genBalance
 }
 
 func writeFile(name string, dir string, contents []byte) error {
-	writePath := filepath.Join(dir)
+	writePath := filepath.Join(dir) //nolint:gocritic
 	file := filepath.Join(writePath, name)
 
 	err := tmos.EnsureDir(writePath, 0o755)
@@ -234,7 +235,7 @@ func writeFile(name string, dir string, contents []byte) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(file, contents, 0o644) // nolint: gosec
+	err = os.WriteFile(file, contents, 0o644) // nolint: gosec
 	if err != nil {
 		return err
 	}
