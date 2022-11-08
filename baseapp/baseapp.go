@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cosmos/iavl"
 	"github.com/gogo/protobuf/proto"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto/tmhash"
@@ -15,6 +16,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/snapshots"
 	"github.com/cosmos/cosmos-sdk/store"
 	"github.com/cosmos/cosmos-sdk/store/rootmulti"
+	"github.com/cosmos/cosmos-sdk/store/tracekv"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -364,6 +366,10 @@ func (app *BaseApp) setMinGasPrices(gasPrices sdk.DecCoins) {
 
 func (app *BaseApp) setHaltHeight(haltHeight uint64) {
 	app.haltHeight = haltHeight
+}
+
+func (app *BaseApp) setInitialHeight(initialHeight int64) {
+	app.initialHeight = initialHeight
 }
 
 func (app *BaseApp) setHaltTime(haltTime uint64) {
@@ -837,4 +843,86 @@ func (app *BaseApp) runMsgs(ctx sdk.Context, msgs []sdk.Msg, mode runTxMode) (*s
 // makeABCIData generates the Data field to be sent to ABCI Check/DeliverTx.
 func makeABCIData(msgResponses []*codectypes.Any) ([]byte, error) {
 	return proto.Marshal(&sdk.TxMsgData{MsgResponses: msgResponses})
+}
+
+// Generate a fraudproof for an app with the given trace buffers
+func (app *BaseApp) getFraudProof() (FraudProof, error) {
+	fraudProof := FraudProof{}
+	fraudProof.stateWitness = make(map[string]StateWitness)
+	fraudProof.blockHeight = app.LastBlockHeight()
+	cms := app.cms.(*rootmulti.Store)
+
+	appHash, err := cms.GetAppHash()
+	if err != nil {
+		return FraudProof{}, err
+	}
+	fraudProof.appHash = appHash
+	storeKeys := cms.GetStoreKeys()
+	for _, storeKey := range storeKeys {
+		if subStoreTraceBuf := cms.GetTracerBufferFor(storeKey.Name()); subStoreTraceBuf != nil {
+			keys := cms.GetKVStore(storeKey).(*tracekv.Store).GetAllKeysUsedInTrace(*subStoreTraceBuf)
+			iavlStore, err := cms.GetIAVLStore(storeKey.Name())
+			if err != nil {
+				return FraudProof{}, err
+			}
+			rootHash, err := iavlStore.Root()
+			if err != nil {
+				return FraudProof{}, err
+			}
+			if rootHash == nil {
+				continue
+			}
+			proof, err := cms.GetStoreProof(storeKey.Name())
+			if err != nil {
+				return FraudProof{}, err
+			}
+			stateWitness := StateWitness{
+				Proof:       *proof,
+				RootHash:    rootHash,
+				WitnessData: make([]WitnessData, 0),
+			}
+			for key := range keys {
+				bKey := []byte(key)
+				has := iavlStore.Has(bKey)
+				if has {
+					bVal := iavlStore.Get(bKey)
+					proof := iavlStore.GetProofFromTree(bKey)
+					witnessData := WitnessData{bKey, bVal, proof.GetOps()[0]}
+					stateWitness.WitnessData = append(stateWitness.WitnessData, witnessData)
+				}
+			}
+			fraudProof.stateWitness[storeKey.Name()] = stateWitness
+		}
+	}
+
+	return fraudProof, nil
+}
+
+// set up a new baseapp from given params
+func SetupBaseAppFromParams(appName string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, storeKeyNames []string, storeKeyToIAVLTree map[string]*iavl.MutableTree, blockHeight int64, options ...func(*BaseApp)) (*BaseApp, error) {
+	storeKeys := make([]storetypes.StoreKey, 0, len(storeKeyNames))
+	for _, storeKeyName := range storeKeyNames {
+		storeKeys = append(storeKeys, sdk.NewKVStoreKey(storeKeyName))
+		iavlTree := storeKeyToIAVLTree[storeKeyName]
+		options = append(options, SetDeepIAVLTree(storeKeyName, iavlTree))
+	}
+	// This initial height is used in `BeginBlock` in `validateHeight`
+	options = append(options, SetInitialHeight(blockHeight))
+
+	app := NewBaseApp(appName, logger, db, txDecoder, options...)
+
+	// stores are mounted
+	app.MountStores(storeKeys...)
+
+	err := app.LoadLatestVersion()
+	return app, err
+}
+
+// set up a new baseapp from a fraudproof
+func SetupBaseAppFromFraudProof(appName string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, fraudProof FraudProof, options ...func(*BaseApp)) (*BaseApp, error) {
+	storeKeyToIAVLTree, err := fraudProof.getDeepIAVLTrees()
+	if err != nil {
+		return nil, err
+	}
+	return SetupBaseAppFromParams(appName, logger, db, txDecoder, fraudProof.getModules(), storeKeyToIAVLTree, fraudProof.blockHeight, options...)
 }

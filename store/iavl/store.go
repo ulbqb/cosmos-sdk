@@ -40,6 +40,13 @@ type Store struct {
 	tree Tree
 }
 
+// LoadStoreWithDeepIAVLTree returns an IAVL Store as a CommitKVStore with given deep tree.
+func LoadStoreWithDeepIAVLTree(tree *iavl.MutableTree) (types.CommitKVStore, error) {
+	return &Store{
+		tree: tree,
+	}, nil
+}
+
 // LoadStore returns an IAVL Store as a CommitKVStore. Internally, it will load the
 // store's version (id) from the provided DB. An error is returned if the version
 // fails to load, or if called with a positive version on an empty tree.
@@ -284,6 +291,18 @@ func (st *Store) Import(version int64) (*iavl.Importer, error) {
 		return nil, errors.New("iavl import failed: unable to find mutable tree")
 	}
 	return tree.Import(version)
+}
+
+// Wrapper for getProofFromTree
+func (st *Store) GetProofFromTree(key []byte) *tmcrypto.ProofOps {
+	iavlTree := st.tree.((*iavl.MutableTree))
+	return getProofFromTree(iavlTree, key, true)
+}
+
+func (st *Store) Root() ([]byte, error) {
+	iavlTree := st.tree.((*iavl.MutableTree))
+	hash, err := iavlTree.WorkingHash()
+	return hash, err
 }
 
 // Handle gatest the latest height, if height is 0

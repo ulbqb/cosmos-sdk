@@ -1,6 +1,7 @@
 package baseapp
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -14,11 +15,13 @@ import (
 	"github.com/gogo/protobuf/proto"
 	abci "github.com/tendermint/tendermint/abci/types"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
+	db "github.com/tendermint/tm-db"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	snapshottypes "github.com/cosmos/cosmos-sdk/snapshots/types"
+	"github.com/cosmos/cosmos-sdk/store/rootmulti"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -129,6 +132,164 @@ func (app *BaseApp) Info(req abci.RequestInfo) abci.ResponseInfo {
 		LastBlockHeight:  lastCommitID.Version,
 		LastBlockAppHash: lastCommitID.Hash,
 	}
+}
+
+// GetAppHash implements the ABCI application interface. It returns an App Hash
+// whiich acts as a unique ID of the current state of the BaseApp.
+func (app *BaseApp) GetAppHash(req abci.RequestGetAppHash) (res abci.ResponseGetAppHash) {
+	cms := app.cms.(*rootmulti.Store)
+
+	appHash, err := cms.GetAppHash()
+	if err != nil {
+		panic(err)
+	}
+	res = abci.ResponseGetAppHash{
+		AppHash: appHash,
+	}
+	return res
+}
+
+func (app *BaseApp) executeNonFraudulentTransactions(req abci.RequestGenerateFraudProof, isDeliverTxFraudulent bool) {
+	numNonFraudulentRequests := len(req.DeliverTxRequests)
+	if isDeliverTxFraudulent {
+		numNonFraudulentRequests--
+	}
+	nonFraudulentRequests := req.DeliverTxRequests[:numNonFraudulentRequests]
+	for _, deliverTxRequest := range nonFraudulentRequests {
+		app.DeliverTx(*deliverTxRequest)
+	}
+}
+
+// GenerateFraudProof implements the ABCI application interface. The BaseApp reverts to
+// previous state, runs the given fraudulent state transition, and gets the trace representing
+// the operations that this state transition makes. It then uses this trace to filter and export
+// the pre-fraudulent state transition execution state of the BaseApp and generates a Fraud Proof
+// representing it. It returns this generated Fraud Proof.
+func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res abci.ResponseGenerateFraudProof) {
+	// Revert app to previous state
+	cms := app.cms.(*rootmulti.Store)
+	err := cms.LoadLastVersion()
+	if err != nil {
+		// Happens when there is no last state to load form
+		panic(err)
+	}
+
+	// Run the set of all nonFradulent and fraudulent state transitions
+	beginBlockRequest := req.BeginBlockRequest
+	isBeginBlockFraudulent := req.DeliverTxRequests == nil
+	isDeliverTxFraudulent := req.EndBlockRequest == nil
+	app.BeginBlock(beginBlockRequest)
+	if !isBeginBlockFraudulent {
+		// BeginBlock is not the fraudulent state transition
+		app.executeNonFraudulentTransactions(req, isDeliverTxFraudulent)
+
+		cms.ResetAllTraceWriters()
+
+		// Record the trace made by the fraudulent state transitions
+		if isDeliverTxFraudulent {
+			// The last DeliverTx is the fraudulent state transition
+			fraudulentDeliverTx := req.DeliverTxRequests[len(req.DeliverTxRequests)-1]
+			app.DeliverTx(*fraudulentDeliverTx)
+		} else {
+			// EndBlock is the fraudulent state transition
+			app.EndBlock(*req.EndBlockRequest)
+		}
+	}
+
+	// SubStore trace buffers now record the trace made by the fradulent state transition
+
+	// Revert app to previous state
+	err = cms.LoadLastVersion()
+	if err != nil {
+		panic(err)
+	}
+
+	// Fast-forward to right before fradulent state transition occurred
+	app.BeginBlock(beginBlockRequest)
+	if !isBeginBlockFraudulent {
+		app.executeNonFraudulentTransactions(req, isDeliverTxFraudulent)
+	}
+
+	// Export the app's current trace-filtered state into a Fraud Proof and return it
+	fraudProof, err := app.getFraudProof()
+	if err != nil {
+		panic(err)
+	}
+
+	switch {
+	case isBeginBlockFraudulent:
+		fraudProof.fraudulentBeginBlock = &beginBlockRequest
+	case isDeliverTxFraudulent:
+		fraudProof.fraudulentDeliverTx = req.DeliverTxRequests[len(req.DeliverTxRequests)-1]
+	default:
+		fraudProof.fraudulentEndBlock = req.EndBlockRequest
+	}
+	abciFraudProof := fraudProof.toABCI()
+	res = abci.ResponseGenerateFraudProof{
+		FraudProof: &abciFraudProof,
+	}
+	return res
+}
+
+// VerifyFraudProof implements the ABCI application interface. It loads a fresh BaseApp using
+// the given Fraud Proof, runs the given fraudulent state transition within the Fraud Proof,
+// and gets the app hash representing state of the resulting BaseApp. It returns a boolean
+// representing whether this app hash is equivalent to the expected app hash given.
+func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci.ResponseVerifyFraudProof) {
+	abciFraudProof := req.FraudProof
+	fraudProof := FraudProof{}
+	fraudProof.fromABCI(*abciFraudProof)
+
+	// First two levels of verification
+	success, err := fraudProof.verifyFraudProof()
+	if err != nil {
+		panic(err)
+	}
+
+	if success {
+		// Third level of verification
+
+		// Setup a new app from fraud proof
+		appFromFraudProof, err := SetupBaseAppFromFraudProof(
+			app.Name()+"FromFraudProof",
+			app.logger,
+			db.NewMemDB(),
+			app.txDecoder,
+			fraudProof,
+		)
+		if err != nil {
+			panic(err)
+		}
+		appFromFraudProof.InitChain(abci.RequestInitChain{})
+		appHash := appFromFraudProof.GetAppHash(abci.RequestGetAppHash{}).AppHash
+
+		if !bytes.Equal(fraudProof.appHash, appHash) {
+			return abci.ResponseVerifyFraudProof{
+				Success: false,
+			}
+		}
+
+		// Execute fraudulent state transition
+		if fraudProof.fraudulentBeginBlock != nil {
+			appFromFraudProof.BeginBlock(*fraudProof.fraudulentBeginBlock)
+		} else {
+			// Need to add some dummy begin block here since its a new app
+
+			appFromFraudProof.BeginBlock(abci.RequestBeginBlock{Header: tmproto.Header{Height: fraudProof.blockHeight}})
+			if fraudProof.fraudulentDeliverTx != nil {
+				appFromFraudProof.DeliverTx(*fraudProof.fraudulentDeliverTx)
+			} else {
+				appFromFraudProof.EndBlock(*fraudProof.fraudulentEndBlock)
+			}
+		}
+
+		appHash = appFromFraudProof.GetAppHash(abci.RequestGetAppHash{}).AppHash
+		success = bytes.Equal(appHash, req.ExpectedAppHash)
+	}
+	res = abci.ResponseVerifyFraudProof{
+		Success: success,
+	}
+	return res
 }
 
 // BeginBlock implements the ABCI application interface.

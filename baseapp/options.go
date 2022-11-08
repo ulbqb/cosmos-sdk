@@ -11,7 +11,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/snapshots"
 	snapshottypes "github.com/cosmos/cosmos-sdk/snapshots/types"
 	"github.com/cosmos/cosmos-sdk/store"
+	"github.com/cosmos/cosmos-sdk/store/rootmulti"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/iavl"
 )
 
 // File for storing in-package BaseApp optional functions,
@@ -30,6 +32,20 @@ func SetMinGasPrices(gasPricesStr string) func(*BaseApp) {
 	}
 
 	return func(bapp *BaseApp) { bapp.setMinGasPrices(gasPrices) }
+}
+
+// SetInitialHeight returns a BaseApp option function that sets the initial block height.
+func SetInitialHeight(blockHeight int64) func(*BaseApp) {
+	return func(bapp *BaseApp) { bapp.setInitialHeight(blockHeight) }
+}
+
+// SetDeepIAVLTree sets the storeParam to have the given deep IAVL tree
+// for the given skey.
+func SetDeepIAVLTree(skey string, iavlTree *iavl.MutableTree) func(*BaseApp) {
+	return func(bapp *BaseApp) {
+		cms := bapp.cms.(*rootmulti.Store)
+		cms.SetDeepIAVLTree(skey, iavlTree)
+	}
 }
 
 // SetHaltHeight returns a BaseApp option function that sets the halt block height.
@@ -194,6 +210,12 @@ func (app *BaseApp) SetFauxMerkleMode() {
 // CommitMultiStore.
 func (app *BaseApp) SetCommitMultiStoreTracer(w io.Writer) {
 	app.cms.SetTracer(w)
+}
+
+// SetCommitKVStoreTracer sets the store tracer on the BaseApp's underlying
+// tracer for a substore with given skey.
+func (app *BaseApp) SetCommitKVStoreTracer(skey string, w io.Writer) {
+	app.cms.SetTracerFor(skey, w)
 }
 
 // SetStoreLoader allows us to customize the rootMultiStore initialization.
