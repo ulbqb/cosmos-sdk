@@ -1,11 +1,13 @@
 package baseapp
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
-	"github.com/cosmos/iavl"
+	iavltree "github.com/cosmos/iavl"
 	"github.com/gogo/protobuf/proto"
+
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto/tmhash"
 	"github.com/tendermint/tendermint/libs/log"
@@ -15,6 +17,7 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/snapshots"
 	"github.com/cosmos/cosmos-sdk/store"
+	iavl "github.com/cosmos/cosmos-sdk/store/iavl"
 	"github.com/cosmos/cosmos-sdk/store/rootmulti"
 	"github.com/cosmos/cosmos-sdk/store/tracekv"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
@@ -113,6 +116,8 @@ type BaseApp struct { // nolint: maligned
 	// abciListeners for hooking into the ABCI message processing of the BaseApp
 	// and exposing the requests and responses to external consumers
 	abciListeners []ABCIListener
+
+	routerOpts map[string]func(*BaseApp)
 }
 
 type appStore struct {
@@ -846,7 +851,7 @@ func makeABCIData(msgResponses []*codectypes.Any) ([]byte, error) {
 }
 
 // Generate a fraudproof for an app with the given trace buffers
-func (app *BaseApp) getFraudProof() (FraudProof, error) {
+func (app *BaseApp) getFraudProof(storeKeyToTraceBuf map[string]*bytes.Buffer) (FraudProof, error) {
 	fraudProof := FraudProof{}
 	fraudProof.stateWitness = make(map[string]StateWitness)
 	fraudProof.blockHeight = app.LastBlockHeight()
@@ -857,54 +862,67 @@ func (app *BaseApp) getFraudProof() (FraudProof, error) {
 		return FraudProof{}, err
 	}
 	fraudProof.appHash = appHash
-	storeKeys := cms.GetStoreKeys()
-	for _, storeKey := range storeKeys {
-		if subStoreTraceBuf := cms.GetTracerBufferFor(storeKey.Name()); subStoreTraceBuf != nil {
-			keys := cms.GetKVStore(storeKey).(*tracekv.Store).GetAllKeysUsedInTrace(*subStoreTraceBuf)
-			iavlStore, err := cms.GetIAVLStore(storeKey.Name())
-			if err != nil {
-				return FraudProof{}, err
-			}
-			rootHash, err := iavlStore.Root()
-			if err != nil {
-				return FraudProof{}, err
-			}
-			if rootHash == nil {
-				continue
-			}
-			proof, err := cms.GetStoreProof(storeKey.Name())
-			if err != nil {
-				return FraudProof{}, err
-			}
-			stateWitness := StateWitness{
-				Proof:       *proof,
-				RootHash:    rootHash,
-				WitnessData: make([]WitnessData, 0),
-			}
-			for key := range keys {
-				bKey := []byte(key)
-				has := iavlStore.Has(bKey)
-				if has {
-					bVal := iavlStore.Get(bKey)
-					proof := iavlStore.GetProofFromTree(bKey)
-					witnessData := WitnessData{bKey, bVal, proof.GetOps()[0]}
-					stateWitness.WitnessData = append(stateWitness.WitnessData, witnessData)
-				}
-			}
-			fraudProof.stateWitness[storeKey.Name()] = stateWitness
+	nameToStoreKey := cms.StoreKeysByName()
+	for storeKeyName, traceBuf := range storeKeyToTraceBuf {
+		storeKey := nameToStoreKey[storeKeyName]
+		keys := cms.GetKVStore(storeKey).(*tracekv.Store).GetAllKeysUsedInTrace(*traceBuf)
+		iavlStore, err := cms.GetIAVLStore(storeKeyName)
+		if err != nil {
+			return FraudProof{}, err
 		}
+		rootHash, err := iavlStore.Root()
+		if err != nil {
+			return FraudProof{}, err
+		}
+		if rootHash == nil {
+			continue
+		}
+		proof, err := cms.GetStoreProof(storeKeyName)
+		if err != nil {
+			return FraudProof{}, err
+		}
+		stateWitness := StateWitness{
+			Proof:       *proof,
+			RootHash:    rootHash,
+			WitnessData: make([]WitnessData, 0),
+		}
+		populateStateWitness(&stateWitness, iavlStore, keys.Values())
+		fraudProof.stateWitness[storeKeyName] = stateWitness
 	}
 
 	return fraudProof, nil
 }
 
+// populates the given state witness using traced keys and underlying iavl store
+func populateStateWitness(stateWitness *StateWitness, iavlStore *iavl.Store, tracedKeys []string) {
+	for _, key := range tracedKeys {
+		bKey := []byte(key)
+		has := iavlStore.Has(bKey)
+		if has {
+			bVal := iavlStore.Get(bKey)
+			proof := iavlStore.GetProofFromTree(bKey)
+			witnessData := WitnessData{bKey, bVal, proof.GetOps()[0]}
+			stateWitness.WitnessData = append(stateWitness.WitnessData, witnessData)
+		} else {
+			dstProof := iavlStore.GetDSTNonExistenceProofFromDeepSubTree(bKey)
+			witnesses := iavlStore.DSTNonExistenceProofToWitnesses(dstProof)
+			for _, witness := range witnesses {
+				if witness != nil {
+					bKey := witness.Key
+					bVal := iavlStore.Get(bKey)
+					witnessData := WitnessData{bKey, bVal, *witness}
+					stateWitness.WitnessData = append(stateWitness.WitnessData, witnessData)
+				}
+			}
+		}
+	}
+}
+
 // set up a new baseapp from given params
-func SetupBaseAppFromParams(appName string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, storeKeyNames []string, storeKeyToIAVLTree map[string]*iavl.MutableTree, blockHeight int64, options ...func(*BaseApp)) (*BaseApp, error) {
+func setupBaseAppFromParams(appName string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, storeKeyNames []string, storeKeyToIAVLTree map[string]*iavltree.DeepSubTree, blockHeight int64, options ...func(*BaseApp)) (*BaseApp, error) {
 	storeKeys := make([]storetypes.StoreKey, 0, len(storeKeyNames))
 	for _, storeKeyName := range storeKeyNames {
 		storeKeys = append(storeKeys, sdk.NewKVStoreKey(storeKeyName))
-		iavlTree := storeKeyToIAVLTree[storeKeyName]
-		options = append(options, SetDeepIAVLTree(storeKeyName, iavlTree))
 	}
 	// This initial height is used in `BeginBlock` in `validateHeight`
 	options = append(options, SetInitialHeight(blockHeight))
@@ -913,7 +931,10 @@ func SetupBaseAppFromParams(appName string, logger log.Logger, db dbm.DB, txDeco
 
 	// stores are mounted
 	app.MountStores(storeKeys...)
-
+	cmsStore := app.cms.(*rootmulti.Store)
+	for storeKey, iavlTree := range storeKeyToIAVLTree {
+		cmsStore.SetDeepIAVLTree(storeKey, iavlTree)
+	}
 	err := app.LoadLatestVersion()
 	return app, err
 }
@@ -924,5 +945,5 @@ func SetupBaseAppFromFraudProof(appName string, logger log.Logger, db dbm.DB, tx
 	if err != nil {
 		return nil, err
 	}
-	return SetupBaseAppFromParams(appName, logger, db, txDecoder, fraudProof.getModules(), storeKeyToIAVLTree, fraudProof.blockHeight, options...)
+	return setupBaseAppFromParams(appName, logger, db, txDecoder, fraudProof.getModules(), storeKeyToIAVLTree, fraudProof.blockHeight, options...)
 }

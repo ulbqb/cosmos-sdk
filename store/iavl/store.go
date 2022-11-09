@@ -41,7 +41,7 @@ type Store struct {
 }
 
 // LoadStoreWithDeepIAVLTree returns an IAVL Store as a CommitKVStore with given deep tree.
-func LoadStoreWithDeepIAVLTree(tree *iavl.MutableTree) (types.CommitKVStore, error) {
+func LoadStoreWithDeepIAVLTree(tree Tree) (types.CommitKVStore, error) {
 	return &Store{
 		tree: tree,
 	}, nil
@@ -300,7 +300,10 @@ func (st *Store) GetProofFromTree(key []byte) *tmcrypto.ProofOps {
 }
 
 func (st *Store) Root() ([]byte, error) {
-	iavlTree := st.tree.((*iavl.MutableTree))
+	iavlTree, ok := st.tree.(*iavl.MutableTree)
+	if !ok {
+		iavlTree = st.tree.(*iavl.DeepSubTree).MutableTree
+	}
 	hash, err := iavlTree.WorkingHash()
 	return hash, err
 }
@@ -428,6 +431,45 @@ func getProofFromTree(tree *iavl.MutableTree, key []byte, exists bool) *tmcrypto
 
 	op := types.NewIavlCommitmentOp(key, commitmentProof)
 	return &tmcrypto.ProofOps{Ops: []tmcrypto.ProofOp{op.ProofOp()}}
+}
+
+// Takes a MutableTree, and a key and returns a DST Non-Existence Proof for the key
+func (st *Store) GetDSTNonExistenceProofFromDeepSubTree(key []byte) *iavl.DSTNonExistenceProof {
+	// value wasn't found
+	iavlTree := st.tree.((*iavl.MutableTree))
+	commitmentProof, err := iavlTree.GetNonMembershipProof(key)
+	if err != nil {
+		// sanity check: If value wasn't found, nonmembership proof must be creatable
+		panic(fmt.Sprintf("unexpected error for nonexistence proof: %s", err.Error()))
+	}
+
+	dstNonExistenceProof, err := iavl.ConvertToDSTNonExistenceProof(iavlTree, commitmentProof.GetNonexist())
+	if err != nil {
+		panic(fmt.Sprintf("unexpected error while creating dst non-existence proof: %s", err.Error()))
+	}
+	return dstNonExistenceProof
+}
+
+func (st *Store) DSTNonExistenceProofToWitnesses(dstNonExistenceProof *iavl.DSTNonExistenceProof) []*tmcrypto.ProofOp {
+	return []*tmcrypto.ProofOp{
+		getProofOp(dstNonExistenceProof.Left),
+		getProofOp(dstNonExistenceProof.Right),
+		getProofOp(dstNonExistenceProof.LeftSiblingProof),
+		getProofOp(dstNonExistenceProof.RightSiblingProof),
+	}
+}
+
+func getProofOp(exist *ics23.ExistenceProof) *tmcrypto.ProofOp {
+	if exist == nil {
+		return nil
+	}
+	commitmentProof := &ics23.CommitmentProof{
+		Proof: &ics23.CommitmentProof_Exist{
+			Exist: exist,
+		},
+	}
+	proofOp := types.NewIavlCommitmentOp(exist.Key, commitmentProof).ProofOp()
+	return &proofOp
 }
 
 //----------------------------------------
