@@ -161,9 +161,9 @@ func (app *BaseApp) executeNonFraudulentTransactions(req abci.RequestGenerateFra
 }
 
 // GenerateFraudProof implements the ABCI application interface. The BaseApp reverts to
-// previous state, runs the given fraudulent state transition, and gets the trace representing
-// the operations that this state transition makes. It then uses this trace to filter and export
-// the pre-fraudulent state transition execution state of the BaseApp and generates a Fraud Proof
+// previous state, runs the given fraudulent state transition, and gets the traced witness data representing
+// the operations that this state transition makes. It then uses this traced witness data and
+// the pre-fraudulent execution state of the BaseApp to generates a Fraud Proof
 // representing it. It returns this generated Fraud Proof.
 func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res abci.ResponseGenerateFraudProof) {
 	// Revert app to previous state
@@ -178,12 +178,15 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 	beginBlockRequest := req.BeginBlockRequest
 	isBeginBlockFraudulent := req.DeliverTxRequests == nil
 	isDeliverTxFraudulent := req.EndBlockRequest == nil
+	if isBeginBlockFraudulent {
+		cms.SetTracingEnabledAll(true)
+	}
 	app.BeginBlock(beginBlockRequest)
 	if !isBeginBlockFraudulent {
 		// BeginBlock is not the fraudulent state transition
 		app.executeNonFraudulentTransactions(req, isDeliverTxFraudulent)
 
-		cms.ResetAllTraceWriters()
+		cms.SetTracingEnabledAll(true)
 
 		// Record the trace made by the fraudulent state transitions
 		if isDeliverTxFraudulent {
@@ -196,15 +199,11 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 		}
 	}
 
-	// SubStore trace buffers now record the trace made by the fradulent state transition, so we copy them in new buffers
-	storeKeyToTraceBuf := make(map[string]*bytes.Buffer)
-	storeKeys := cms.GetStoreKeys()
-	for _, storeKey := range storeKeys {
-		subStoreTraceBuf := cms.GetTracerBufferFor(storeKey.Name())
-		traceBuf := bytes.Buffer{}
-		traceBuf.Write(subStoreTraceBuf.Bytes())
-		storeKeyToTraceBuf[storeKey.Name()] = &traceBuf
+	storeKeyToWitnessData, err := cms.GetWitnessDataMap()
+	if err != nil {
+		panic(err)
 	}
+
 	// Revert app to previous state
 	err = cms.LoadLastVersion()
 	if err != nil {
@@ -218,7 +217,7 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 	}
 
 	// Export the app's current trace-filtered state into a Fraud Proof and return it
-	fraudProof, err := app.getFraudProof(storeKeyToTraceBuf)
+	fraudProof, err := app.getFraudProof(storeKeyToWitnessData)
 	if err != nil {
 		panic(err)
 	}
@@ -231,9 +230,12 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 	default:
 		fraudProof.fraudulentEndBlock = req.EndBlockRequest
 	}
-	abciFraudProof := fraudProof.toABCI()
+	abciFraudProof, err := fraudProof.toABCI()
+	if err != nil {
+		panic(err)
+	}
 	res = abci.ResponseGenerateFraudProof{
-		FraudProof: &abciFraudProof,
+		FraudProof: abciFraudProof,
 	}
 	return res
 }
@@ -245,16 +247,19 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci.ResponseVerifyFraudProof) {
 	abciFraudProof := req.FraudProof
 	fraudProof := FraudProof{}
-	fraudProof.fromABCI(*abciFraudProof)
+	err := fraudProof.fromABCI(*abciFraudProof)
+	if err != nil {
+		panic(err)
+	}
 
-	// First two levels of verification
+	// Store and subtore level verification
 	success, err := fraudProof.verifyFraudProof()
 	if err != nil {
 		panic(err)
 	}
 
 	if success {
-		// Third level of verification
+		// State execution verification
 		options := make([]func(*BaseApp), 0)
 		if app.routerOpts != nil {
 			for _, routerOpt := range app.routerOpts {
@@ -287,7 +292,6 @@ func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci
 			appFromFraudProof.BeginBlock(*fraudProof.fraudulentBeginBlock)
 		} else {
 			// Need to add some dummy begin block here since its a new app
-
 			appFromFraudProof.BeginBlock(abci.RequestBeginBlock{Header: tmproto.Header{Height: fraudProof.blockHeight}})
 			if fraudProof.fraudulentDeliverTx != nil {
 				resp := appFromFraudProof.DeliverTx(*fraudProof.fraudulentDeliverTx)
