@@ -1055,13 +1055,19 @@ func (rs *Store) getWorkingMap() (map[string][]byte, error) {
 	m := make(map[string][]byte, len(stores))
 	for key := range stores {
 		name := key.Name()
-		iavlStore, err := rs.GetIAVLStore(name)
-		if err != nil {
-			return nil, err
-		}
-		m[name], err = iavlStore.Root()
-		if err != nil {
-			return nil, err
+		store := rs.GetStoreByName(name)
+		storeType := store.GetStoreType()
+		if storeType != types.StoreTypeIAVL {
+			m[name] = []byte{}
+		} else {
+			iavlStore, err := rs.GetIAVLStore(name)
+			if err != nil {
+				return nil, err
+			}
+			m[name], err = iavlStore.Root()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return m, nil
