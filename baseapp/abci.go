@@ -187,6 +187,8 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 		app.executeNonFraudulentTransactions(req, isDeliverTxFraudulent)
 
 		cms.SetTracingEnabledAll(true)
+		// skip IncrementSequenceDecorator check in AnteHandler
+		app.anteHandler = nil
 
 		// Record the trace made by the fraudulent state transitions
 		if isDeliverTxFraudulent {
