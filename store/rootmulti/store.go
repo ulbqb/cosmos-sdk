@@ -377,10 +377,9 @@ func (rs *Store) SetTracer(w io.Writer) types.MultiStore {
 func (rs *Store) SetTracingEnabledAll(tracingEnabled bool) error {
 	for skey := range rs.keysByName {
 		iavlStore, err := rs.GetIAVLStore(skey)
-		if err != nil {
-			return err
+		if err == nil {
+			iavlStore.SetTracingEnabled(tracingEnabled)
 		}
-		iavlStore.SetTracingEnabled(tracingEnabled)
 	}
 	return nil
 }
