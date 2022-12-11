@@ -374,17 +374,16 @@ func (rs *Store) SetTracer(w io.Writer) types.MultiStore {
 
 // SetTracer sets the tracer for the MultiStore that the underlying
 // stores will utilize to trace operations.
-func (rs *Store) SetTracingEnabledAll(tracingEnabled bool) error {
+func (rs *Store) SetTracingEnabledAll(tracingEnabled bool) {
 	for skey := range rs.keysByName {
 		iavlStore, err := rs.GetIAVLStore(skey)
 		if err == nil {
 			iavlStore.SetTracingEnabled(tracingEnabled)
 		}
 	}
-	return nil
 }
 
-func (rs *Store) GetWitnessDataMap() (map[string][]iavltree.WitnessData, error) {
+func (rs *Store) GetWitnessDataMap() map[string][]iavltree.WitnessData {
 	storeKeyToWitnessData := make(map[string][]iavltree.WitnessData)
 	for skey := range rs.keysByName {
 		iavlStore, err := rs.GetIAVLStore(skey)
@@ -392,7 +391,7 @@ func (rs *Store) GetWitnessDataMap() (map[string][]iavltree.WitnessData, error) 
 			storeKeyToWitnessData[skey] = iavlStore.GetWitnessData()
 		}
 	}
-	return storeKeyToWitnessData, nil
+	return storeKeyToWitnessData
 }
 
 // SetTracingContext updates the tracing context for the MultiStore by merging

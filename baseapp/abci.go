@@ -199,11 +199,7 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 		}
 	}
 
-	storeKeyToWitnessData, err := cms.GetWitnessDataMap()
-	if err != nil {
-		panic(err)
-	}
-
+	storeKeyToWitnessData := cms.GetWitnessDataMap()
 	// Revert app to previous state
 	err = cms.LoadLastVersion()
 	if err != nil {
