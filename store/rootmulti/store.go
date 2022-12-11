@@ -388,10 +388,9 @@ func (rs *Store) GetWitnessDataMap() (map[string][]iavltree.WitnessData, error) 
 	storeKeyToWitnessData := make(map[string][]iavltree.WitnessData)
 	for skey := range rs.keysByName {
 		iavlStore, err := rs.GetIAVLStore(skey)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			storeKeyToWitnessData[skey] = iavlStore.GetWitnessData()
 		}
-		storeKeyToWitnessData[skey] = iavlStore.GetWitnessData()
 	}
 	return storeKeyToWitnessData, nil
 }
