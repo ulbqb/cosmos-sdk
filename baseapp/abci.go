@@ -205,11 +205,12 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 
 	storeKeyToWitnessData := cms.GetWitnessDataMap()
 	// Revert app to previous state
+	cms.SetInterBlockCache(nil)
 	err = cms.LoadLastVersion()
 	if err != nil {
 		panic(err)
 	}
-
+	app.deliverState = nil
 	// Fast-forward to right before fradulent state transition occurred
 	app.BeginBlock(beginBlockRequest)
 	if !isBeginBlockFraudulent {
