@@ -168,6 +168,7 @@ func (app *BaseApp) executeNonFraudulentTransactions(req abci.RequestGenerateFra
 func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res abci.ResponseGenerateFraudProof) {
 	// Revert app to previous state
 	cms := app.cms.(*rootmulti.Store)
+	cms.SetInterBlockCache(nil)
 	err := cms.LoadLastVersion()
 	if err != nil {
 		// Happens when there is no last state to load form
