@@ -272,6 +272,7 @@ func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci
 			db.NewMemDB(),
 			app.txDecoder,
 			fraudProof,
+			app.MsgServiceRouter(),
 			options...,
 		)
 		if err != nil {
