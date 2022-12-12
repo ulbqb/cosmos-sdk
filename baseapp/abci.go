@@ -175,7 +175,7 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 		// Happens when there is no last state to load form
 		panic(err)
 	}
-
+	app.deliverState = nil
 	// Run the set of all nonFradulent and fraudulent state transitions
 	beginBlockRequest := req.BeginBlockRequest
 	isBeginBlockFraudulent := req.DeliverTxRequests == nil
