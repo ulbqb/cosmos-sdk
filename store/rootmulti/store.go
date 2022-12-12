@@ -1047,6 +1047,8 @@ func (rs *Store) GetAppHash() ([]byte, error) {
 	return sdkmaps.HashFromMap(m), nil
 }
 
+// Returns a map from store name to substore hash for all substores in the multistore
+// Note: Only IAVL substores are included in the app hash for use in Fraud Proof detection
 func (rs *Store) getWorkingMap() (map[string][]byte, error) {
 	stores := rs.stores
 	m := make(map[string][]byte, len(stores))
@@ -1054,9 +1056,7 @@ func (rs *Store) getWorkingMap() (map[string][]byte, error) {
 		name := key.Name()
 		store := rs.GetStoreByName(name)
 		storeType := store.GetStoreType()
-		if storeType != types.StoreTypeIAVL {
-			m[name] = []byte{}
-		} else {
+		if storeType == types.StoreTypeIAVL {
 			iavlStore, err := rs.GetIAVLStore(name)
 			if err != nil {
 				return nil, err
