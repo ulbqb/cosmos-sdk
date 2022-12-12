@@ -22,6 +22,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	snapshottypes "github.com/cosmos/cosmos-sdk/snapshots/types"
 	"github.com/cosmos/cosmos-sdk/store/rootmulti"
+	types "github.com/cosmos/cosmos-sdk/store/v2alpha1"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -265,6 +266,13 @@ func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci
 				options = append(options, routerOpt)
 			}
 		}
+		cms := app.cms.(*rootmulti.Store)
+		storeKeys := cms.StoreKeysByName()
+		modules := fraudProof.getModules()
+		iavlStoreKeys := make([]types.StoreKey, 0, len(modules))
+		for _, module := range modules {
+			iavlStoreKeys = append(iavlStoreKeys, storeKeys[module])
+		}
 		// Setup a new app from fraud proof
 		appFromFraudProof, err := SetupBaseAppFromFraudProof(
 			app.Name()+"FromFraudProof",
@@ -272,7 +280,8 @@ func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci
 			db.NewMemDB(),
 			app.txDecoder,
 			fraudProof,
-			app.MsgServiceRouter(),
+			app.msgServiceRouter,
+			iavlStoreKeys,
 			options...,
 		)
 		if err != nil {

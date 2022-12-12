@@ -2371,7 +2371,8 @@ func TestGenerateAndLoadFraudProof(t *testing.T) {
 	// B2 <- S2
 	codec := codec.NewLegacyAmino()
 	registerTestCodec(codec)
-	appB2, err := SetupBaseAppFromFraudProof(t.Name(), defaultLogger(), dbm.NewMemDB(), testTxDecoder(codec), fraudProof, appB1.msgServiceRouter, routerOpt)
+	cms := appB1.cms.(*rootmulti.Store)
+	appB2, err := SetupBaseAppFromFraudProof(t.Name(), defaultLogger(), dbm.NewMemDB(), testTxDecoder(codec), fraudProof, appB1.msgServiceRouter, cms.GetStoreKeys(), routerOpt)
 	require.Nil(t, err)
 	appB2Hash, err := appB2.cms.(*rootmulti.Store).GetAppHash()
 	require.Nil(t, err)

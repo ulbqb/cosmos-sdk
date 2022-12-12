@@ -903,11 +903,7 @@ func populateStateWitness(stateWitness *StateWitness, iavlWitnessData []iavltree
 }
 
 // set up a new baseapp from given params
-func setupBaseAppFromParams(appName string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, storeKeyNames []string, storeKeyToIAVLTree map[string]*iavltree.DeepSubTree, blockHeight int64, msgServiceRouter *MsgServiceRouter, options ...func(*BaseApp)) (*BaseApp, error) {
-	storeKeys := make([]storetypes.StoreKey, 0, len(storeKeyNames))
-	for _, storeKeyName := range storeKeyNames {
-		storeKeys = append(storeKeys, sdk.NewKVStoreKey(storeKeyName))
-	}
+func setupBaseAppFromParams(appName string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, storeKeyToIAVLTree map[string]*iavltree.DeepSubTree, blockHeight int64, msgServiceRouter *MsgServiceRouter, storeKeys []storetypes.StoreKey, options ...func(*BaseApp)) (*BaseApp, error) {
 	// This initial height is used in `BeginBlock` in `validateHeight`
 	options = append(options, SetInitialHeight(blockHeight))
 
@@ -926,10 +922,10 @@ func setupBaseAppFromParams(appName string, logger log.Logger, db dbm.DB, txDeco
 }
 
 // set up a new baseapp from a fraudproof
-func SetupBaseAppFromFraudProof(appName string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, fraudProof FraudProof, msgServiceRouter *MsgServiceRouter, options ...func(*BaseApp)) (*BaseApp, error) {
+func SetupBaseAppFromFraudProof(appName string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, fraudProof FraudProof, msgServiceRouter *MsgServiceRouter, storeKeys []storetypes.StoreKey, options ...func(*BaseApp)) (*BaseApp, error) {
 	storeKeyToIAVLTree, err := fraudProof.getDeepIAVLTrees()
 	if err != nil {
 		return nil, err
 	}
-	return setupBaseAppFromParams(appName, logger, db, txDecoder, fraudProof.getModules(), storeKeyToIAVLTree, fraudProof.blockHeight, msgServiceRouter, options...)
+	return setupBaseAppFromParams(appName, logger, db, txDecoder, storeKeyToIAVLTree, fraudProof.blockHeight, msgServiceRouter, storeKeys, options...)
 }
