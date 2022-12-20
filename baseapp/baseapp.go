@@ -844,3 +844,18 @@ func (app *BaseApp) runMsgs(ctx sdk.Context, msgs []sdk.Msg, mode runTxMode) (*s
 func makeABCIData(msgResponses []*codectypes.Any) ([]byte, error) {
 	return proto.Marshal(&sdk.TxMsgData{MsgResponses: msgResponses})
 }
+
+func (app *BaseApp) GetAppHash(hash abci.RequestGetAppHash) abci.ResponseGetAppHash {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (app *BaseApp) GenerateFraudProof(proof abci.RequestGenerateFraudProof) abci.ResponseGenerateFraudProof {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (app *BaseApp) VerifyFraudProof(proof abci.RequestVerifyFraudProof) abci.ResponseVerifyFraudProof {
+	//TODO implement me
+	panic("implement me")
+}
