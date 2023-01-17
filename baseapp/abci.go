@@ -276,13 +276,9 @@ func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci
 		}
 		// Setup a new app from fraud proof
 		appFromFraudProof, err := SetupBaseAppFromFraudProof(
-			app.Name()+"FromFraudProof",
-			app.logger,
+			app,
 			db.NewMemDB(),
-			app.txDecoder,
-			app.beginBlocker,
 			fraudProof,
-			app.msgServiceRouter,
 			iavlStoreKeys,
 			options...,
 		)
