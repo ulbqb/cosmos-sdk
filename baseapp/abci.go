@@ -202,6 +202,7 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 			app.EndBlock(*req.EndBlockRequest)
 		}
 	}
+	validAppHash := app.GetAppHash(abci.RequestGetAppHash{}).AppHash
 
 	storeKeyToWitnessData := cms.GetWitnessDataMap()
 	// Revert app to previous state
@@ -222,6 +223,8 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 	if err != nil {
 		panic(err)
 	}
+
+	fraudProof.expectedValidAppHash = validAppHash
 
 	switch {
 	case isBeginBlockFraudulent:
