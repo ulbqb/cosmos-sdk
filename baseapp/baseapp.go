@@ -913,7 +913,6 @@ func setupBaseAppFromParams(app *BaseApp, db dbm.DB, storeKeyToIAVLTree map[stri
 	newApp.msgServiceRouter = app.msgServiceRouter
 	newApp.beginBlocker = app.beginBlocker
 	newApp.endBlocker = app.endBlocker
-	newApp.SetAnteHandler(app.anteHandler)
 	// stores are mounted
 	newApp.MountStores(storeKeys...)
 	cmsStore := newApp.cms.(*rootmulti.Store)
