@@ -280,6 +280,7 @@ func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci
 			app.logger,
 			db.NewMemDB(),
 			app.txDecoder,
+			app.beginBlocker,
 			fraudProof,
 			app.msgServiceRouter,
 			iavlStoreKeys,
@@ -302,6 +303,7 @@ func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci
 			appFromFraudProof.BeginBlock(*fraudProof.fraudulentBeginBlock)
 		} else {
 			// Need to add some dummy begin block here since its a new app
+			appFromFraudProof.beginBlocker = nil
 			appFromFraudProof.BeginBlock(abci.RequestBeginBlock{Header: tmproto.Header{Height: fraudProof.blockHeight}})
 			if fraudProof.fraudulentDeliverTx != nil {
 				resp := appFromFraudProof.DeliverTx(*fraudProof.fraudulentDeliverTx)
@@ -372,6 +374,7 @@ func (app *BaseApp) BeginBlock(req abci.RequestBeginBlock) (res abci.ResponseBeg
 
 	if app.beginBlocker != nil {
 		res = app.beginBlocker(app.deliverState.ctx, req)
+		app.deliverState.ms.Write()
 		res.Events = sdk.MarkEventsToIndex(res.Events, app.indexEvents)
 	}
 	// set the signed validators for addition to context in deliverTx
