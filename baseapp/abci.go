@@ -22,6 +22,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	snapshottypes "github.com/cosmos/cosmos-sdk/snapshots/types"
 	"github.com/cosmos/cosmos-sdk/store/rootmulti"
+	types "github.com/cosmos/cosmos-sdk/store/v2alpha1"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -168,12 +169,13 @@ func (app *BaseApp) executeNonFraudulentTransactions(req abci.RequestGenerateFra
 func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res abci.ResponseGenerateFraudProof) {
 	// Revert app to previous state
 	cms := app.cms.(*rootmulti.Store)
+	cms.SetInterBlockCache(nil)
 	err := cms.LoadLastVersion()
 	if err != nil {
 		// Happens when there is no last state to load form
 		panic(err)
 	}
-
+	app.deliverState = nil
 	// Run the set of all nonFradulent and fraudulent state transitions
 	beginBlockRequest := req.BeginBlockRequest
 	isBeginBlockFraudulent := req.DeliverTxRequests == nil
@@ -187,6 +189,8 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 		app.executeNonFraudulentTransactions(req, isDeliverTxFraudulent)
 
 		cms.SetTracingEnabledAll(true)
+		// skip IncrementSequenceDecorator check in AnteHandler
+		app.anteHandler = nil
 
 		// Record the trace made by the fraudulent state transitions
 		if isDeliverTxFraudulent {
@@ -198,18 +202,16 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 			app.EndBlock(*req.EndBlockRequest)
 		}
 	}
+	validAppHash := app.GetAppHash(abci.RequestGetAppHash{}).AppHash
 
-	storeKeyToWitnessData, err := cms.GetWitnessDataMap()
-	if err != nil {
-		panic(err)
-	}
-
+	storeKeyToWitnessData := cms.GetWitnessDataMap()
 	// Revert app to previous state
+	cms.SetInterBlockCache(nil)
 	err = cms.LoadLastVersion()
 	if err != nil {
 		panic(err)
 	}
-
+	app.deliverState = nil
 	// Fast-forward to right before fradulent state transition occurred
 	app.BeginBlock(beginBlockRequest)
 	if !isBeginBlockFraudulent {
@@ -221,6 +223,8 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 	if err != nil {
 		panic(err)
 	}
+
+	fraudProof.expectedValidAppHash = validAppHash
 
 	switch {
 	case isBeginBlockFraudulent:
@@ -266,13 +270,19 @@ func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci
 				options = append(options, routerOpt)
 			}
 		}
+		cms := app.cms.(*rootmulti.Store)
+		storeKeys := cms.StoreKeysByName()
+		modules := fraudProof.getModules()
+		iavlStoreKeys := make([]types.StoreKey, 0, len(modules))
+		for _, module := range modules {
+			iavlStoreKeys = append(iavlStoreKeys, storeKeys[module])
+		}
 		// Setup a new app from fraud proof
 		appFromFraudProof, err := SetupBaseAppFromFraudProof(
-			app.Name()+"FromFraudProof",
-			app.logger,
+			app,
 			db.NewMemDB(),
-			app.txDecoder,
 			fraudProof,
+			iavlStoreKeys,
 			options...,
 		)
 		if err != nil {
@@ -292,6 +302,7 @@ func (app *BaseApp) VerifyFraudProof(req abci.RequestVerifyFraudProof) (res abci
 			appFromFraudProof.BeginBlock(*fraudProof.fraudulentBeginBlock)
 		} else {
 			// Need to add some dummy begin block here since its a new app
+			appFromFraudProof.beginBlocker = nil
 			appFromFraudProof.BeginBlock(abci.RequestBeginBlock{Header: tmproto.Header{Height: fraudProof.blockHeight}})
 			if fraudProof.fraudulentDeliverTx != nil {
 				resp := appFromFraudProof.DeliverTx(*fraudProof.fraudulentDeliverTx)
@@ -362,6 +373,7 @@ func (app *BaseApp) BeginBlock(req abci.RequestBeginBlock) (res abci.ResponseBeg
 
 	if app.beginBlocker != nil {
 		res = app.beginBlocker(app.deliverState.ctx, req)
+		app.deliverState.ms.Write()
 		res.Events = sdk.MarkEventsToIndex(res.Events, app.indexEvents)
 	}
 	// set the signed validators for addition to context in deliverTx
@@ -466,7 +478,7 @@ func (app *BaseApp) DeliverTx(req abci.RequestDeliverTx) (res abci.ResponseDeliv
 		resultStr = "failed"
 		return sdkerrors.ResponseDeliverTxWithEvents(err, gInfo.GasWanted, gInfo.GasUsed, sdk.MarkEventsToIndex(anteEvents, app.indexEvents), app.trace)
 	}
-
+	app.deliverState.ms.Write()
 	return abci.ResponseDeliverTx{
 		GasWanted: int64(gInfo.GasWanted), // TODO: Should type accept unsigned ints?
 		GasUsed:   int64(gInfo.GasUsed),   // TODO: Should type accept unsigned ints?

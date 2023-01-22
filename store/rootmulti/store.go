@@ -374,27 +374,24 @@ func (rs *Store) SetTracer(w io.Writer) types.MultiStore {
 
 // SetTracer sets the tracer for the MultiStore that the underlying
 // stores will utilize to trace operations.
-func (rs *Store) SetTracingEnabledAll(tracingEnabled bool) error {
+func (rs *Store) SetTracingEnabledAll(tracingEnabled bool) {
 	for skey := range rs.keysByName {
 		iavlStore, err := rs.GetIAVLStore(skey)
-		if err != nil {
-			return err
+		if err == nil {
+			iavlStore.SetTracingEnabled(tracingEnabled)
 		}
-		iavlStore.SetTracingEnabled(tracingEnabled)
 	}
-	return nil
 }
 
-func (rs *Store) GetWitnessDataMap() (map[string][]iavltree.WitnessData, error) {
+func (rs *Store) GetWitnessDataMap() map[string][]iavltree.WitnessData {
 	storeKeyToWitnessData := make(map[string][]iavltree.WitnessData)
 	for skey := range rs.keysByName {
 		iavlStore, err := rs.GetIAVLStore(skey)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			storeKeyToWitnessData[skey] = iavlStore.GetWitnessData()
 		}
-		storeKeyToWitnessData[skey] = iavlStore.GetWitnessData()
 	}
-	return storeKeyToWitnessData, nil
+	return storeKeyToWitnessData
 }
 
 // SetTracingContext updates the tracing context for the MultiStore by merging
@@ -1050,18 +1047,24 @@ func (rs *Store) GetAppHash() ([]byte, error) {
 	return sdkmaps.HashFromMap(m), nil
 }
 
+// Returns a map from store name to substore hash for all substores in the multistore
+// Note: Only IAVL substores are included in the app hash for use in Fraud Proof detection
 func (rs *Store) getWorkingMap() (map[string][]byte, error) {
 	stores := rs.stores
 	m := make(map[string][]byte, len(stores))
 	for key := range stores {
 		name := key.Name()
-		iavlStore, err := rs.GetIAVLStore(name)
-		if err != nil {
-			return nil, err
-		}
-		m[name], err = iavlStore.Root()
-		if err != nil {
-			return nil, err
+		store := rs.GetStoreByName(name)
+		storeType := store.GetStoreType()
+		if storeType == types.StoreTypeIAVL {
+			iavlStore, err := rs.GetIAVLStore(name)
+			if err != nil {
+				return nil, err
+			}
+			m[name], err = iavlStore.Root()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return m, nil

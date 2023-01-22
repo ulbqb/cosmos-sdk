@@ -194,8 +194,8 @@ github.com/c-bata/go-prompt v0.2.2/go.mod h1:VzqtzE2ksDBcdln8G7mk2RX9QyGjH+OVqOC
 github.com/casbin/casbin/v2 v2.1.2/go.mod h1:YcPU1XXisHhLzuxH9coDNf2FbKpjGlbCg3n9yuLkIJQ=
 github.com/celestiaorg/go-cnc v0.1.0 h1:u986OnTc7AtbUZ4reY+zRCiar4fDdR1KehyP78uwsXg=
 github.com/celestiaorg/go-cnc v0.1.0/go.mod h1:Zf03bWWq6aldv5cYEaWvJ+I+z34bT/exrS0tO0y/jN8=
-github.com/celestiaorg/iavl v0.0.0-20221201192910-5ae6efb417a7 h1:rkQi1MkzeV6nksYC8gjuNsIB8usNf1MGbYQAAopoCHk=
-github.com/celestiaorg/iavl v0.0.0-20221201192910-5ae6efb417a7/go.mod h1:C1I+r1j4oBfP49Oyf4B43namZwEI52JpA7ULjCFSWng=
+github.com/celestiaorg/iavl v0.0.0-20230105192234-715b65a7ecf1 h1:icHV8vuWg79BnMbpnF/1x9CKZKwU9xZo71lAGlV04zE=
+github.com/celestiaorg/iavl v0.0.0-20230105192234-715b65a7ecf1/go.mod h1:cLAvvJG18rcTlwmETgTXUhlwuXt6C0WV+LmsaLo2Na0=
 github.com/celestiaorg/rollmint v0.4.0 h1:+eu2m25ALhlHj9pbAElzq2pSg6WJ4Bn8/WqL2H79rJI=
 github.com/celestiaorg/rollmint v0.4.0/go.mod h1:EBnqxgmcH0MIgNgiI8NyVa1sNSzCyCpvAlAHd9myhk4=
 github.com/celestiaorg/smt v0.3.0 h1:Hc6m8fIVRajrg/Saf8ivX4xw551LHzOs8kqeadd6h9s=
@@ -1028,8 +1028,8 @@ github.com/onsi/gomega v1.4.1/go.mod h1:C1qb7wdrVGGVU+Z6iS04AVkA3Q65CEZX59MT0QO5
 github.com/onsi/gomega v1.4.3/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
 github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7JYyY=
 github.com/onsi/gomega v1.10.1/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1ybHNo=
-github.com/onsi/gomega v1.13.0 h1:7lLHu94wT9Ij0o6EWWclhu0aOh32VxhkwEJvzuWPeak=
 github.com/onsi/gomega v1.13.0/go.mod h1:lRk9szgn8TxENtWd0Tp4c3wjlRfMTMH27I+3Je41yGY=
+github.com/onsi/gomega v1.18.1 h1:M1GfJqGRrBrrGGsbxzV5dqM2U2ApXefZCQpkukxYRLE=
 github.com/op/go-logging v0.0.0-20160315200505-970db520ece7/go.mod h1:HzydrMdWErDVzsI23lYNej1Htcns9BCg93Dk0bBINWk=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 h1:rc3tiVYb5z54aKaDfakKn0dDjIyPpTtszkjuMzyt7ec=

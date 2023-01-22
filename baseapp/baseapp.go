@@ -903,31 +903,31 @@ func populateStateWitness(stateWitness *StateWitness, iavlWitnessData []iavltree
 }
 
 // set up a new baseapp from given params
-func setupBaseAppFromParams(appName string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, storeKeyNames []string, storeKeyToIAVLTree map[string]*iavltree.DeepSubTree, blockHeight int64, options ...func(*BaseApp)) (*BaseApp, error) {
-	storeKeys := make([]storetypes.StoreKey, 0, len(storeKeyNames))
-	for _, storeKeyName := range storeKeyNames {
-		storeKeys = append(storeKeys, sdk.NewKVStoreKey(storeKeyName))
-	}
+func setupBaseAppFromParams(app *BaseApp, db dbm.DB, storeKeyToIAVLTree map[string]*iavltree.DeepSubTree, blockHeight int64, storeKeys []storetypes.StoreKey, options ...func(*BaseApp)) (*BaseApp, error) {
 	// This initial height is used in `BeginBlock` in `validateHeight`
 	options = append(options, SetInitialHeight(blockHeight))
 
-	app := NewBaseApp(appName, logger, db, txDecoder, options...)
+	appName := app.Name() + "FromFraudProof"
+	newApp := NewBaseApp(appName, app.logger, db, app.txDecoder, options...)
 
+	newApp.msgServiceRouter = app.msgServiceRouter
+	newApp.beginBlocker = app.beginBlocker
+	newApp.endBlocker = app.endBlocker
 	// stores are mounted
-	app.MountStores(storeKeys...)
-	cmsStore := app.cms.(*rootmulti.Store)
+	newApp.MountStores(storeKeys...)
+	cmsStore := newApp.cms.(*rootmulti.Store)
 	for storeKey, iavlTree := range storeKeyToIAVLTree {
 		cmsStore.SetDeepIAVLTree(storeKey, iavlTree)
 	}
-	err := app.LoadLatestVersion()
-	return app, err
+	err := newApp.LoadLatestVersion()
+	return newApp, err
 }
 
 // set up a new baseapp from a fraudproof
-func SetupBaseAppFromFraudProof(appName string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecoder, fraudProof FraudProof, options ...func(*BaseApp)) (*BaseApp, error) {
+func SetupBaseAppFromFraudProof(app *BaseApp, db dbm.DB, fraudProof FraudProof, storeKeys []storetypes.StoreKey, options ...func(*BaseApp)) (*BaseApp, error) {
 	storeKeyToIAVLTree, err := fraudProof.getDeepIAVLTrees()
 	if err != nil {
 		return nil, err
 	}
-	return setupBaseAppFromParams(appName, logger, db, txDecoder, fraudProof.getModules(), storeKeyToIAVLTree, fraudProof.blockHeight, options...)
+	return setupBaseAppFromParams(app, db, storeKeyToIAVLTree, fraudProof.blockHeight, storeKeys, options...)
 }
