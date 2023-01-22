@@ -23,10 +23,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 
-	rollconf "github.com/celestiaorg/rollmint/config"
-	rollconv "github.com/celestiaorg/rollmint/conv"
-	rollnode "github.com/celestiaorg/rollmint/node"
-	rollrpc "github.com/celestiaorg/rollmint/rpc"
+	rollconf "github.com/rollkit/rollkit/config"
+	rollconv "github.com/rollkit/rollkit/conv"
+	rollnode "github.com/rollkit/rollkit/node"
+	rollrpc "github.com/rollkit/rollkit/rpc"
 )
 
 func startInProcess(cfg Config, val *Validator) error {
@@ -43,7 +43,7 @@ func startInProcess(cfg Config, val *Validator) error {
 		return err
 	}
 	pval := privval.LoadOrGenFilePV(tmCfg.PrivValidatorKeyFile(), tmCfg.PrivValidatorStateFile())
-	// keys in rollmint format
+	// keys in Rollkit format
 	p2pKey, err := rollconv.GetNodeKey(nodeKey)
 	if err != nil {
 		return err

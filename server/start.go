@@ -37,10 +37,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
 
-	rollconf "github.com/celestiaorg/rollmint/config"
-	rollconv "github.com/celestiaorg/rollmint/conv"
-	rollnode "github.com/celestiaorg/rollmint/node"
-	rollrpc "github.com/celestiaorg/rollmint/rpc"
+	rollconf "github.com/rollkit/rollkit/config"
+	rollconv "github.com/rollkit/rollkit/conv"
+	rollnode "github.com/rollkit/rollkit/node"
+	rollrpc "github.com/rollkit/rollkit/rpc"
 )
 
 const (
@@ -316,14 +316,14 @@ func startInProcess(ctx *Context, clientCtx client.Context, appCreator types.App
 		ctx.Logger.Info("starting node in gRPC only mode; Tendermint is disabled")
 		config.GRPC.Enable = true
 	} else {
-		ctx.Logger.Info("starting node with rollmint in-process")
+		ctx.Logger.Info("starting node with Rollkit in-process")
 
 		nodeKey, err := p2p.LoadOrGenNodeKey(cfg.NodeKeyFile())
 		if err != nil {
 			return err
 		}
 		pval := privval.LoadOrGenFilePV(cfg.PrivValidatorKeyFile(), cfg.PrivValidatorStateFile())
-		// keys in rollmint format
+		// keys in Rollkit format
 		p2pKey, err := rollconv.GetNodeKey(nodeKey)
 		if err != nil {
 			return err
