@@ -45,7 +45,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
-	rollnode "github.com/celestiaorg/rollmint/node"
+	rollnode "github.com/rollkit/rollkit/node"
 )
 
 // package-wide network lock to only allow one test network at a time
@@ -165,7 +165,7 @@ type (
 		ValAddress sdk.ValAddress
 		RPCClient  tmclient.Client
 
-		tmNode  *rollnode.Node
+		tmNode  rollnode.Node
 		api     *api.Server
 		grpc    *grpc.Server
 		grpcWeb *http.Server
@@ -594,8 +594,9 @@ func (n *Network) Cleanup() {
 	n.Logger.Log("cleaning up test network...")
 
 	for _, v := range n.Validators {
-		if v.tmNode != nil && v.tmNode.IsRunning() {
-			_ = v.tmNode.Stop()
+		// TODO(tzdybal): add IsRunning and Stop methods to Node interface
+		if v.tmNode != nil && v.tmNode.(*rollnode.FullNode).IsRunning() {
+			_ = v.tmNode.(*rollnode.FullNode).Stop()
 		}
 
 		if v.api != nil {

@@ -380,6 +380,8 @@ func (k Keeper) TallyProposalsAtVPEnd(ctx sdk.Context) error {
 	if err != nil {
 		return nil
 	}
+
+	//nolint:gosec // implicit memory aliasing in for loop
 	for _, proposal := range proposals {
 		policyInfo, err := k.getGroupPolicyInfo(ctx, proposal.GroupPolicyAddress)
 		if err != nil {
@@ -399,9 +401,8 @@ func (k Keeper) TallyProposalsAtVPEnd(ctx sdk.Context) error {
 			if err := k.pruneVotes(ctx, proposalID); err != nil {
 				return err
 			}
-		} else {
-			err = k.doTallyAndUpdate(ctx, &proposal, electorate, policyInfo) //nolint:gosec // implicit memory aliasing in for loop
-			if err != nil {
+		} else if proposal.Status == group.PROPOSAL_STATUS_SUBMITTED {
+			if err := k.doTallyAndUpdate(ctx, &proposal, electorate, policyInfo); err != nil {
 				return sdkerrors.Wrap(err, "doTallyAndUpdate")
 			}
 
@@ -409,6 +410,8 @@ func (k Keeper) TallyProposalsAtVPEnd(ctx sdk.Context) error {
 				return sdkerrors.Wrap(err, "proposal update")
 			}
 		}
+		// Note: We do nothing if the proposal has been marked as ACCEPTED or
+		// REJECTED.
 	}
 	return nil
 }
