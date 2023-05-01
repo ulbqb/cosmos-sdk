@@ -212,8 +212,8 @@ func (app *BaseApp) GenerateFraudProof(req abci.RequestGenerateFraudProof) (res 
 		panic(err)
 	}
 	app.deliverState = nil
-	// Fast-forward to right before fradulent state transition occurred
-	app.BeginBlock(beginBlockRequest)
+	// Fast-forward to right before fraudulent state transition occurred
+	app.BeginBlock(beginBlockRequest) //TODO: Potentially move inside next if statement
 	if !isBeginBlockFraudulent {
 		app.executeNonFraudulentTransactions(req, isDeliverTxFraudulent)
 	}
