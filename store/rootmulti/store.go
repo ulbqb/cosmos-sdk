@@ -15,7 +15,6 @@ import (
 	gogotypes "github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
 	abci "github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/libs/log"
 	dbm "github.com/tendermint/tm-db"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/store/cachemulti"
 	"github.com/cosmos/cosmos-sdk/store/dbadapter"
 	"github.com/cosmos/cosmos-sdk/store/iavl"
-	sdkproofs "github.com/cosmos/cosmos-sdk/store/internal/proofs"
 	"github.com/cosmos/cosmos-sdk/store/listenkv"
 	"github.com/cosmos/cosmos-sdk/store/mem"
 	"github.com/cosmos/cosmos-sdk/store/tracekv"
@@ -492,40 +490,6 @@ func (rs *Store) Commit() types.CommitID {
 		version = previousHeight + 1
 	}
 
-	proofs := []*merkle.Proof{}
-	if rs.stateless {
-		for key := range rs.stores {
-			if rs.removalMap[key] {
-				continue
-			}
-
-			name := key.Name()
-			store := rs.GetStoreByName(name)
-			storeType := store.GetStoreType()
-			if storeType != types.StoreTypeIAVL {
-				continue
-			}
-
-			iavlStore, err := rs.GetIAVLStore(name)
-			if err != nil {
-				continue
-			}
-			exist := iavlStore.GetStoreProof()
-			if exist == nil {
-				continue
-			}
-
-			total := len(rs.lastCommitInfo.StoreInfos)
-			index := rs.lastCommitInfo.GetIndex(name)
-			mproof, _ := sdkproofs.ConvertMerkleProof(exist, total, index)
-
-			proofs = append(proofs, mproof)
-		}
-	}
-	panic("proof ni saishin no store root wa hukumarete imasu ka?")
-	panic("upgrade ni yoru revoval map ni taiou suru tame ConvertMerkleProof kinshi subete no store root wo totte kuru query de")
-	panic("store ga tsuika sareta toki no taiou mo hituyou")
-
 	rs.lastCommitInfo = commitStores(version, rs.stores, rs.removalMap)
 	defer rs.flushMetadata(rs.db, version, rs.lastCommitInfo)
 
@@ -544,16 +508,9 @@ func (rs *Store) Commit() types.CommitID {
 		panic(err)
 	}
 
-	var hash []byte
-	if rs.stateless {
-		hash = merkle.ComputeHashFromProofs(proofs)
-	} else {
-		hash = rs.lastCommitInfo.Hash()
-	}
-
 	return types.CommitID{
 		Version: version,
-		Hash:    hash,
+		Hash:    rs.lastCommitInfo.Hash(),
 	}
 }
 
