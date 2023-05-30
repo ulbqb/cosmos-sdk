@@ -1669,6 +1669,61 @@ func TestQuery(t *testing.T) {
 	require.Equal(t, value, res.Value)
 }
 
+func TestQuery2(t *testing.T) {
+	key, value := []byte("hello"), []byte("goodbye")
+	anteOpt := func(bapp *BaseApp) {
+		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, err error) {
+			store := ctx.KVStore(capKey1)
+			store.Set(key, value)
+			return
+		})
+	}
+
+	routerOpt := func(bapp *BaseApp) {
+		r := sdk.NewRoute(routeMsgCounter, func(ctx sdk.Context, msg sdk.Msg) (*sdk.Result, error) {
+			store := ctx.KVStore(capKey1)
+			store.Set(key, value)
+			return &sdk.Result{}, nil
+		})
+		bapp.Router().AddRoute(r)
+	}
+
+	app := setupBaseApp(t, anteOpt, routerOpt)
+
+	app.InitChain(abci.RequestInitChain{})
+
+	// NOTE: "/store/key1" tells us KVStore
+	// and the final "/key" says to use the data as the
+	// key in the given KVStore ...
+	query := abci.RequestQuery{
+		Path:   "/store/key1/key",
+		Data:   key,
+		Height: 1,
+		Prove:  true,
+	}
+	tx := newTxCounter(0, 0)
+
+	// query is still empty after a CheckTx
+	_, resTx, err := app.SimCheck(aminoTxEncoder(), tx)
+	require.NoError(t, err)
+	require.NotNil(t, resTx)
+
+	// query is still empty after a DeliverTx before we commit
+	header := tmproto.Header{Height: app.LastBlockHeight() + 1}
+	app.BeginBlock(abci.RequestBeginBlock{Header: header})
+
+	_, resTx, err = app.SimDeliver(aminoTxEncoder(), tx)
+	require.NoError(t, err)
+	require.NotNil(t, resTx)
+
+	// query returns correct value after Commit
+	app.Commit()
+	res := app.Query(query)
+	// require.Equal(t, value, res.Value)
+	fmt.Printf("%v\n", res)
+	panic("panic")
+}
+
 func TestGRPCQuery(t *testing.T) {
 	grpcQueryOpt := func(bapp *BaseApp) {
 		testdata.RegisterQueryServer(

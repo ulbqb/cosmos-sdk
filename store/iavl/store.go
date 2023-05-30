@@ -303,6 +303,14 @@ func (st *Store) Root() ([]byte, error) {
 	return hash, err
 }
 
+func (st *Store) GetStoreProof() *ics23.ExistenceProof {
+	iavlTree, ok := st.tree.(*iavl.DeepSubTree)
+	if !ok {
+		return nil
+	}
+	return iavlTree.GetStoreProof()
+}
+
 // Handle gatest the latest height, if height is 0
 func getHeight(tree Tree, req abci.RequestQuery) int64 {
 	height := req.Height

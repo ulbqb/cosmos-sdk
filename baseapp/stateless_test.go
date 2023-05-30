@@ -81,7 +81,7 @@ func SetupAppFromBlock(app *BaseApp, block *tmproto.Block, oracle *stateless.Ora
 	return newApp, err
 }
 
-func ExecuteStateless() {
+func ExecuteStateless() []byte {
 	// initialize oracle
 	oracle := stateless.NewOracleClient()
 
@@ -121,7 +121,7 @@ func ExecuteStateless() {
 	resp := app.Commit()
 
 	// output
-	fmt.Fprint(os.Stdout, resp.Data)
+	return resp.Data
 }
 
 func TestExecuteStateless(t *testing.T) {
@@ -139,6 +139,15 @@ func TestExecuteStateless(t *testing.T) {
 			agreedApphash = res.GetData()
 		}
 	}
+
+	res := app.Query(abci.RequestQuery{
+		Data:   []byte("getstorehash"),
+		Path:   "store/key2/key",
+		Height: 4,
+		Prove:  true,
+	})
+	fmt.Println(res.Value)
+	fmt.Println(len(res.ProofOps.Ops))
 
 	stateless.OracleS.Fun = func(key []byte) []byte {
 		u, err := url.Parse(string(key))
@@ -198,5 +207,5 @@ func TestExecuteStateless(t *testing.T) {
 	fmt.Printf("agreed app hash: %v\n", agreedApphash)
 	fmt.Printf("challenge app hash: %v\n", challengeApphash)
 
-	ExecuteStateless()
+	fmt.Fprint(os.Stdout, ExecuteStateless())
 }

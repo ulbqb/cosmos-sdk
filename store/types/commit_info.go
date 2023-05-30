@@ -51,3 +51,8 @@ func (ci CommitInfo) CommitID() CommitID {
 		Hash:    ci.Hash(),
 	}
 }
+
+func (ci CommitInfo) GetIndex(storeName string) int {
+	panic("implement me")
+	return 0
+}

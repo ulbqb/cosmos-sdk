@@ -5,6 +5,8 @@ import (
 	"math/bits"
 
 	ics23 "github.com/confio/ics23/go"
+	"github.com/tendermint/tendermint/crypto/merkle"
+	"github.com/tendermint/tendermint/crypto/tmhash"
 	"github.com/tendermint/tendermint/proto/tendermint/crypto"
 )
 
@@ -95,4 +97,21 @@ func getSplitPoint(length int64) int64 {
 		k >>= 1
 	}
 	return k
+}
+
+func ConvertMerkleProof(p *ics23.ExistenceProof, total int, index int) (*merkle.Proof, error) {
+	aunts := make([][]byte, len(p.Path))
+	for _, inner := range p.Path {
+		if len(inner.Prefix) == 1 {
+			aunts = append(aunts, inner.Suffix)
+		} else {
+			aunts = append(aunts, inner.Prefix[1:])
+		}
+	}
+	return &merkle.Proof{
+		Total:    int64(total),
+		Index:    int64(index),
+		LeafHash: tmhash.Sum(append([]byte{0}, p.Value...)),
+		Aunts:    aunts,
+	}, nil
 }

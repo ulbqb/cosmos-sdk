@@ -180,12 +180,8 @@ github.com/celestiaorg/go-header v0.2.1 h1:h6EiEcrA7K9dg5bRNe7aNQ13rDAL4/wRB5juj
 github.com/celestiaorg/go-header v0.2.1/go.mod h1:6XKf0yhoEQqfKQTZnyTZjTjF5jH5Wq9uO9AvDMkdYbs=
 github.com/celestiaorg/go-libp2p-messenger v0.2.0 h1:/0MuPDcFamQMbw9xTZ73yImqgTO3jHV7wKHvWD/Irao=
 github.com/celestiaorg/go-libp2p-messenger v0.2.0/go.mod h1:s9PIhMi7ApOauIsfBcQwbr7m+HBzmVfDIS+QLdgzDSo=
-github.com/celestiaorg/iavl v0.0.0-20230105192234-715b65a7ecf1 h1:icHV8vuWg79BnMbpnF/1x9CKZKwU9xZo71lAGlV04zE=
-github.com/celestiaorg/iavl v0.0.0-20230105192234-715b65a7ecf1/go.mod h1:cLAvvJG18rcTlwmETgTXUhlwuXt6C0WV+LmsaLo2Na0=
 github.com/celestiaorg/smt v0.3.0 h1:Hc6m8fIVRajrg/Saf8ivX4xw551LHzOs8kqeadd6h9s=
 github.com/celestiaorg/smt v0.3.0/go.mod h1:/sdYDakowo/XaxS2Fl7CBqtuf/O2uTqF2zmAUFAtAiw=
-github.com/celestiaorg/tendermint v0.34.22-0.20221202214355-3605c597500d h1:OH9dp6WWotp53aG58xSdLWd+F1Znf3DhA0BadyJO4Aw=
-github.com/celestiaorg/tendermint v0.34.22-0.20221202214355-3605c597500d/go.mod h1:zoyyiiihvTW8DnOr63YLxhYn/WK/QmE74CeIpS++hBE=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=
 github.com/cenkalti/backoff v2.2.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
 github.com/cenkalti/backoff/v4 v4.1.1/go.mod h1:scbssz8iZGpm3xbr14ovlUdkxfGXNInqkPWOWmG2CLw=
