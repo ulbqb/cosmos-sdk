@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/cosmos/cosmos-sdk/stateless"
 	sdkmaps "github.com/cosmos/cosmos-sdk/store/internal/maps"
 	iavltree "github.com/cosmos/iavl"
 	protoio "github.com/gogo/protobuf/io"
@@ -63,6 +64,8 @@ type Store struct {
 	interBlockCache types.MultiStorePersistentCache
 
 	listeners map[types.StoreKey][]types.WriteListener
+
+	oracle *stateless.OracleClient
 }
 
 var (
@@ -363,6 +366,15 @@ func (rs *Store) SetDeepIAVLTree(skey string, iavlTree iavl.Tree) {
 	storeParams := rs.storesParams[key]
 	storeParams.deepIAVLTree = iavlTree
 	rs.storesParams[key] = storeParams
+}
+
+func (rs *Store) SetupStoresParams(oracle *stateless.OracleClient) {
+	block := oracle.GetBlock()
+	for _, key := range rs.GetStoreKeys() {
+		storeParams := rs.storesParams[key]
+		storeParams.deepIAVLTree2 = iavltree.NewDeepSubTree2(dbm.NewMemDB(), 100, false, block.Header.Height, oracle, key.Name())
+		rs.storesParams[key] = storeParams
+	}
 }
 
 // SetTracer sets the tracer for the MultiStore that the underlying
@@ -949,6 +961,8 @@ func (rs *Store) loadCommitStoreFromParams(key types.StoreKey, id types.CommitID
 		var store types.CommitKVStore
 		var err error
 		switch {
+		case params.deepIAVLTree2 != nil:
+			store, err = iavl.LoadStoreWithDeepIAVLTree(params.deepIAVLTree)
 		case params.deepIAVLTree != nil:
 			store, err = iavl.LoadStoreWithDeepIAVLTree(params.deepIAVLTree)
 		case params.initialVersion == 0:
@@ -1089,7 +1103,8 @@ type storeParams struct {
 	typ            types.StoreType
 	initialVersion uint64
 
-	deepIAVLTree iavl.Tree
+	deepIAVLTree  iavl.Tree
+	deepIAVLTree2 iavl.Tree
 
 	traceWriter io.Writer
 }

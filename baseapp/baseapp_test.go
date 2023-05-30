@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math/rand"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -52,7 +52,7 @@ type setupConfig struct {
 }
 
 func defaultLogger() log.Logger {
-	return log.NewTMLogger(log.NewSyncWriter(os.Stdout)).With("module", "sdk/app")
+	return log.NewTMLogger(log.NewSyncWriter(io.Discard)).With("module", "sdk/app")
 }
 
 func newBaseApp(name string, options ...func(*BaseApp)) *BaseApp {
@@ -2175,13 +2175,13 @@ func TestBaseApp_EndBlock(t *testing.T) {
 	require.Equal(t, cp.Block.MaxGas, res.ConsensusParamUpdates.Block.MaxGas)
 }
 
-func executeBlockWithArbitraryTxs(t *testing.T, app *BaseApp, numTransactions int, blockHeight int64) []txTest {
+func executeBlockWithArbitraryTxs(t *testing.T, app *BaseApp, numTransactions int, blockHeight int64) tmproto.Block {
 	codec := codec.NewLegacyAmino()
 	registerTestCodec(codec)
 	r := rand.New(rand.NewSource(randSource))
 	randSource += 1
 	keyCounter := r.Intn(10000)
-	txs := make([]txTest, 0)
+	txs := make([][]byte, 0)
 
 	app.BeginBlock(abci.RequestBeginBlock{Header: tmproto.Header{Height: blockHeight}})
 	for txNum := 0; txNum < numTransactions; txNum++ {
@@ -2198,10 +2198,19 @@ func executeBlockWithArbitraryTxs(t *testing.T, app *BaseApp, numTransactions in
 		require.NoError(t, err)
 		resp := app.DeliverTx(abci.RequestDeliverTx{Tx: txBytes})
 		require.True(t, resp.IsOK(), "%v", resp.String())
-		txs = append(txs, tx)
+		txs = append(txs, txBytes)
 	}
 	app.EndBlock(abci.RequestEndBlock{Height: blockHeight})
-	return txs
+
+	block := tmproto.Block{
+		Header: tmproto.Header{
+			Height: blockHeight,
+		},
+		Data: tmproto.Data{
+			Txs: txs,
+		},
+	}
+	return block
 }
 
 func getBlockWithArbitraryTxs(t *testing.T, app *BaseApp, numTransactions int, blockHeight int64) (*abci.RequestBeginBlock, []txTest, []*abci.RequestDeliverTx, *abci.RequestEndBlock) {

@@ -125,8 +125,8 @@ func (fraudProof *FraudProof) getDeepIAVLTrees() (map[string]*iavl.DeepSubTree, 
 					Proofs:    existenceProofs,
 				},
 			)
-			dst.SetWitnessData(iavlWitnessData)
 		}
+		dst.SetWitnessData(iavlWitnessData)
 		dst.SetInitialRootHash(stateWitness.RootHash)
 		storeKeyToIAVLTree[storeKey] = dst
 	}

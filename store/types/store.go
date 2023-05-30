@@ -24,6 +24,8 @@ type Committer interface {
 
 	SetPruning(pruningtypes.PruningOptions)
 	GetPruning() pruningtypes.PruningOptions
+
+	GetProof2() []byte
 }
 
 // Stores of MultiStore must implement CommitStore.
