@@ -125,7 +125,7 @@ func setupBaseAppWithSnapshots(t *testing.T, config *setupConfig) (*BaseApp, err
 			tx := txTest{Msgs: []sdk.Msg{}}
 			for msgNum := 0; msgNum < 100; msgNum++ {
 				key := []byte(fmt.Sprintf("%v", keyCounter))
-				value := make([]byte, 10000)
+				value := make([]byte, 10)
 				_, err := r.Read(value)
 				require.NoError(t, err)
 				tx.Msgs = append(tx.Msgs, msgKeyValue{Key: key, Value: value})
@@ -2243,7 +2243,7 @@ func executeBlockWithArbitraryTxs(t *testing.T, app *BaseApp, numTransactions in
 		tx := txTest{Msgs: []sdk.Msg{}}
 		for msgNum := 0; msgNum < 1; msgNum++ {
 			key := []byte(fmt.Sprintf("%v", keyCounter))
-			value := make([]byte, 10000)
+			value := make([]byte, 10)
 			_, err := r.Read(value)
 			require.NoError(t, err)
 			tx.Msgs = append(tx.Msgs, msgKeyValue{Key: key, Value: value})
@@ -2282,7 +2282,7 @@ func getBlockWithArbitraryTxs(t *testing.T, app *BaseApp, numTransactions int, b
 		tx := txTest{Msgs: []sdk.Msg{}}
 		for msgNum := 0; msgNum < 1; msgNum++ {
 			key := []byte(fmt.Sprintf("%v", keyCounter))
-			value := make([]byte, 10000)
+			value := make([]byte, 10)
 			_, err := r.Read(value)
 			require.NoError(t, err)
 			tx.Msgs = append(tx.Msgs, msgKeyValue{Key: key, Value: value})
@@ -2343,7 +2343,7 @@ func getFraudTx(t *testing.T, tx txTest) *abci.RequestDeliverTx {
 	r := rand.New(rand.NewSource(randSource))
 	randSource += 1
 
-	newValue := make([]byte, 10000)
+	newValue := make([]byte, 10)
 	_, err := r.Read(newValue)
 	require.NoError(t, err)
 	fraudTx.Msgs = append(fraudTx.Msgs, msgKeyValue{Key: key, Value: newValue})

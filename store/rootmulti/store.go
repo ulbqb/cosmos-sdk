@@ -373,7 +373,7 @@ func (rs *Store) SetupStoresParams(oracle *stateless.OracleClient) {
 	block := oracle.GetBlock()
 	for _, key := range rs.GetStoreKeys() {
 		storeParams := rs.storesParams[key]
-		storeParams.deepIAVLTree2 = iavltree.NewDeepSubTree2(dbm.NewMemDB(), 100, false, block.Header.Height, oracle, key.Name())
+		storeParams.deepIAVLTree2 = iavltree.NewWitnessTree(dbm.NewMemDB(), 100, false, block.Header.Height, oracle, key.Name())
 		rs.storesParams[key] = storeParams
 	}
 }
@@ -963,7 +963,7 @@ func (rs *Store) loadCommitStoreFromParams(key types.StoreKey, id types.CommitID
 		var err error
 		switch {
 		case params.deepIAVLTree2 != nil:
-			store, err = iavl.LoadStoreWithDeepIAVLTree(params.deepIAVLTree)
+			store, err = iavl.LoadStoreWithDeepIAVLTree(params.deepIAVLTree2)
 		case params.deepIAVLTree != nil:
 			store, err = iavl.LoadStoreWithDeepIAVLTree(params.deepIAVLTree)
 		case params.initialVersion == 0:

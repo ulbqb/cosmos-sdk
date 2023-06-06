@@ -1,8 +1,6 @@
 package baseapp
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"net/url"
 	"os"
@@ -11,8 +9,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/stateless"
 	"github.com/cosmos/cosmos-sdk/store/rootmulti"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/stretchr/testify/require"
 	abci "github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/proto/tendermint/crypto"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	dbm "github.com/tendermint/tm-db"
 )
@@ -70,7 +68,6 @@ func SetupAppFromBlock(app *BaseApp, block *tmproto.Block, oracle *stateless.Ora
 
 	// set oracle to IAVL Store
 	cmsStore := newApp.cms.(*rootmulti.Store)
-	// cmsStore.SetAppHash(commit.AppHash)
 	cmsStore.SetupStoresParams(oracle)
 
 	err := newApp.LoadLatestVersion()
@@ -91,7 +88,6 @@ func ExecuteStateless() []byte {
 
 	// get input data from oracle
 	block := oracle.GetBlock()
-	fmt.Printf("proof %v\n", len(oracle.GetProof("key2/key", "1430").ProofOps.Ops))
 
 	// Setup from oracle
 	// TODO: check to use pure NewTestApp()
@@ -107,9 +103,10 @@ func ExecuteStateless() []byte {
 
 	// deliver txs
 	for _, tx := range block.Data.Txs {
-		app.DeliverTx(abci.RequestDeliverTx{
+		res := app.DeliverTx(abci.RequestDeliverTx{
 			Tx: tx,
 		})
+		fmt.Printf("tx res: %v\n", res)
 	}
 
 	// end block
@@ -134,20 +131,11 @@ func TestExecuteStateless(t *testing.T) {
 	for i := range make([]int, challengeHeihgt) {
 		challengeBlock = executeBlockWithArbitraryTxs(t, app, 5, int64(i)+1)
 		res := app.Commit()
-		challengeApphash = res.GetData()
-		if int64(i) == challengeHeihgt-1 {
-			agreedApphash = res.GetData()
+		challengeApphash = res.Data
+		if int64(i) == challengeHeihgt-2 {
+			agreedApphash = res.Data
 		}
 	}
-
-	res := app.Query(abci.RequestQuery{
-		Data:   []byte("getstorehash"),
-		Path:   "store/key2/key",
-		Height: 4,
-		Prove:  true,
-	})
-	fmt.Println(res.Value)
-	fmt.Println(len(res.ProofOps.Ops))
 
 	stateless.OracleS.Fun = func(key []byte) []byte {
 		u, err := url.Parse(string(key))
@@ -172,7 +160,7 @@ func TestExecuteStateless(t *testing.T) {
 				panic(err)
 			}
 			return b
-		case "store":
+		case "abci_query":
 			m, err := url.ParseQuery(u.RawQuery)
 			if err != nil {
 				panic(err)
@@ -180,26 +168,17 @@ func TestExecuteStateless(t *testing.T) {
 
 			res := app.Query(abci.RequestQuery{
 				Data:   []byte(m["data"][0]),
-				Path:   "store/" + m["path"][0],
+				Path:   m["path"][0],
 				Height: challengeHeihgt - 1,
 				Prove:  true,
 			})
 
-			ops := make([]*crypto.ProofOp, len(res.ProofOps.Ops))
-			for _, op := range res.ProofOps.Ops {
-				ops = append(ops, &op)
-			}
-			eops, err := convertToExistenceProofs(ops)
+			q, err := res.Marshal()
 			if err != nil {
 				panic(err)
 			}
 
-			buf := &bytes.Buffer{}
-			err = binary.Write(buf, binary.BigEndian, eops)
-			if err != nil {
-				panic(err)
-			}
-			return buf.Bytes()
+			return q
 		}
 		return nil
 	}
@@ -207,5 +186,7 @@ func TestExecuteStateless(t *testing.T) {
 	fmt.Printf("agreed app hash: %v\n", agreedApphash)
 	fmt.Printf("challenge app hash: %v\n", challengeApphash)
 
-	fmt.Fprint(os.Stdout, ExecuteStateless())
+	genHash := ExecuteStateless()
+	fmt.Fprint(os.Stdout, genHash)
+	require.Equal(t, challengeApphash, genHash)
 }

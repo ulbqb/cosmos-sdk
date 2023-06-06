@@ -293,22 +293,13 @@ func (st *Store) Import(version int64) (*iavl.Importer, error) {
 }
 
 func (st *Store) Root() ([]byte, error) {
-	iavlTree, ok := st.tree.(*iavl.MutableTree)
-	if !ok {
-		iavlTree := st.tree.(*iavl.DeepSubTree)
-		rootHash, err := iavlTree.GetInitialRootHash()
-		return rootHash, err
+	switch st.tree.(type) {
+	case *iavl.WitnessTree:
+		return st.tree.(*iavl.WitnessTree).GetInitialRootHash()
+	case *iavl.DeepSubTree:
+		return st.tree.(*iavl.DeepSubTree).GetInitialRootHash()
 	}
-	hash, err := iavlTree.WorkingHash()
-	return hash, err
-}
-
-func (st *Store) GetStoreProof() *ics23.ExistenceProof {
-	iavlTree, ok := st.tree.(*iavl.DeepSubTree)
-	if !ok {
-		return nil
-	}
-	return iavlTree.GetStoreProof()
+	return st.tree.(*iavl.MutableTree).WorkingHash()
 }
 
 // Handle gatest the latest height, if height is 0
@@ -379,6 +370,39 @@ func (st *Store) Query(req abci.RequestQuery) (res abci.ResponseQuery) {
 		// get proof from tree and convert to merkle.Proof before adding to result
 		res.ProofOps = getProofFromTree(mtree, req.Data, res.Value != nil)
 
+	case "/keys":
+		key := req.Data // data holds the key bytes
+
+		res.Key = key
+		if !st.VersionExists(res.Height) {
+			res.Log = iavl.ErrVersionDoesNotExist.Error()
+			break
+		}
+
+		value, err := tree.GetVersioned(key, res.Height)
+		if err != nil {
+			panic(err)
+		}
+		res.Value = value
+
+		if !req.Prove {
+			break
+		}
+
+		// Continue to prove existence/absence of value
+		// Must convert store.Tree to iavl.MutableTree with given version to use in CreateProof
+		iTree, err := tree.GetImmutable(res.Height)
+		if err != nil {
+			// sanity check: If value for given version was retrieved, immutable tree must also be retrievable
+			panic(fmt.Sprintf("version exists in store but could not retrieve corresponding versioned tree in store, %s", err.Error()))
+		}
+		mtree := &iavl.MutableTree{
+			ImmutableTree: iTree,
+		}
+
+		// get proof from tree and convert to merkle.Proof before adding to result
+		res.ProofOps = getProofWithKeyFromTree(mtree, req.Data, res.Value != nil)
+
 	case "/subspace":
 		pairs := kv.Pairs{
 			Pairs: make([]kv.Pair, 0),
@@ -434,6 +458,41 @@ func getProofFromTree(tree *iavl.MutableTree, key []byte, exists bool) *tmcrypto
 
 	op := types.NewIavlCommitmentOp(key, commitmentProof)
 	return &tmcrypto.ProofOps{Ops: []tmcrypto.ProofOp{op.ProofOp()}}
+}
+
+func getProofWithKeyFromTree(tree *iavl.MutableTree, key []byte, exists bool) *tmcrypto.ProofOps {
+	var (
+		commitmentProofs []*ics23.CommitmentProof
+		err              error
+	)
+
+	if exists {
+		// value was found
+		commitmentProofs, err = tree.GetMembershipProofWithKey(key)
+		if err != nil {
+			// sanity check: If value was found, membership proof must be creatable
+			panic(fmt.Sprintf("unexpected value for empty proof: %s", err.Error()))
+		}
+	} else {
+		// value wasn't found
+		commitmentProofs, err = tree.GetNonMembershipProofWithKey(key)
+		if err != nil {
+			// sanity check: If value wasn't found, nonmembership proof must be creatable
+			panic(fmt.Sprintf("unexpected error for nonexistence proof: %s", err.Error()))
+		}
+	}
+
+	proofOps := []tmcrypto.ProofOp{}
+	for i := range commitmentProofs {
+		k := []byte{}
+		if e := commitmentProofs[i].GetExist(); e != nil {
+			k = e.Key
+		} else if ne := commitmentProofs[i].GetNonexist(); ne != nil {
+			k = ne.Key
+		}
+		proofOps = append(proofOps, types.NewIavlCommitmentOp(k, commitmentProofs[i]).ProofOp())
+	}
+	return &tmcrypto.ProofOps{Ops: proofOps}
 }
 
 // Takes a MutableTree, and a key and returns a DST Non-Existence Proof for the key
