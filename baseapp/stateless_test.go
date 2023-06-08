@@ -1,6 +1,7 @@
 package baseapp
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"testing"
@@ -126,7 +127,7 @@ func ExecuteStateless() []byte {
 }
 
 func TestExecuteStateless(t *testing.T) {
-	randSource = 1
+	randSource = 3
 	app := NewTestApp()
 	app.InitChain(abci.RequestInitChain{})
 	challengeHeihgt := int64(5)
@@ -171,9 +172,13 @@ func TestExecuteStateless(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
+			data, err := hex.DecodeString(m["data"][0])
+			if err != nil {
+				panic(err)
+			}
 
 			res := app.Query(abci.RequestQuery{
-				Data:   []byte(m["data"][0]),
+				Data:   data,
 				Path:   m["path"][0],
 				Height: challengeHeihgt - 1,
 				Prove:  true,
