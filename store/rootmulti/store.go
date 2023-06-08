@@ -373,7 +373,7 @@ func (rs *Store) SetupStoresParams(oracle *stateless.OracleClient) {
 	block := oracle.GetBlock()
 	for _, key := range rs.GetStoreKeys() {
 		storeParams := rs.storesParams[key]
-		storeParams.deepIAVLTree2 = iavltree.NewWitnessTree(dbm.NewMemDB(), 100, false, block.Header.Height, oracle, key.Name())
+		storeParams.deepIAVLTree2 = iavltree.NewWitnessTree(dbm.NewMemDB(), 100, false, block.Header.Height-1, oracle, key.Name())
 		rs.storesParams[key] = storeParams
 	}
 }
@@ -471,6 +471,16 @@ func (rs *Store) LastCommitID() types.CommitID {
 	}
 
 	return rs.lastCommitInfo.CommitID()
+}
+
+func (rs *Store) EmptyCommit(version int64) {
+	batch := rs.db.NewBatch()
+	defer batch.Close()
+	ci := &types.CommitInfo{
+		Version:    version,
+		StoreInfos: []types.StoreInfo{},
+	}
+	flushCommitInfo(batch, version, ci)
 }
 
 // Commit implements Committer/CommitStore.
@@ -1133,7 +1143,7 @@ func commitStores(version int64, storeMap map[types.StoreKey]types.CommitKVStore
 
 	for key, store := range storeMap {
 		last := store.LastCommitID()
-
+		fmt.Println(last.Version, version)
 		// If a commit event execution is interrupted, a new iavl store's version will be larger than the rootmulti's metadata, when the block is replayed, we should avoid committing that iavl store again.
 		var commitID types.CommitID
 		if last.Version >= version {

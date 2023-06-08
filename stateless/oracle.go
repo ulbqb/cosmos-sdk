@@ -46,7 +46,7 @@ func (o OracleClient) Query(path, data string) *abci.ResponseQuery {
 	return &q
 }
 
-func (o OracleClient) GetProof(path, data string) []*ics23.ExistenceProof {
+func (o OracleClient) GetProof(path, data string) []*ics23.CommitmentProof {
 	q := o.Query("store/"+path, data)
 	ops := make([]*crypto.ProofOp, len(q.ProofOps.Ops))
 	for i := range q.ProofOps.Ops {
@@ -54,11 +54,11 @@ func (o OracleClient) GetProof(path, data string) []*ics23.ExistenceProof {
 		ops[i] = &op
 	}
 
-	eops, err := convertToExistenceProofs(ops)
+	cops, err := convertToCommitmentProofs(ops)
 	if err != nil {
 		panic(err)
 	}
-	return eops
+	return cops
 }
 
 var OracleS = &OracleServer{}
@@ -71,24 +71,19 @@ func (s OracleServer) Get(key []byte) []byte {
 	return s.Fun(key)
 }
 
-func convertToExistenceProofs(proofs []*crypto.ProofOp) ([]*ics23.ExistenceProof, error) {
-	existenceProofs := make([]*ics23.ExistenceProof, 0)
-	for _, proof := range proofs {
-		_, existenceProof, err := getExistenceProof(*proof)
+func convertToCommitmentProofs(ops []*crypto.ProofOp) ([]*ics23.CommitmentProof, error) {
+	cps := make([]*ics23.CommitmentProof, 0)
+	for _, op := range ops {
+		op, err := types.CommitmentOpDecoder(*op)
 		if err != nil {
 			return nil, err
 		}
-		existenceProofs = append(existenceProofs, existenceProof)
+		commitmentOp := op.(types.CommitmentOp)
+		commitmentProof := commitmentOp.GetProof()
+		if err != nil {
+			return nil, err
+		}
+		cps = append(cps, commitmentProof)
 	}
-	return existenceProofs, nil
-}
-
-func getExistenceProof(proofOp crypto.ProofOp) (types.CommitmentOp, *ics23.ExistenceProof, error) {
-	op, err := types.CommitmentOpDecoder(proofOp)
-	if err != nil {
-		return types.CommitmentOp{}, nil, err
-	}
-	commitmentOp := op.(types.CommitmentOp)
-	commitmentProof := commitmentOp.GetProof()
-	return commitmentOp, commitmentProof.GetExist(), nil
+	return cps, nil
 }

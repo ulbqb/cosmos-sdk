@@ -3,7 +3,6 @@ package baseapp
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"testing"
 
 	"github.com/cosmos/cosmos-sdk/stateless"
@@ -69,6 +68,7 @@ func SetupAppFromBlock(app *BaseApp, block *tmproto.Block, oracle *stateless.Ora
 	// set oracle to IAVL Store
 	cmsStore := newApp.cms.(*rootmulti.Store)
 	cmsStore.SetupStoresParams(oracle)
+	// cmsStore.EmptyCommit(block.Header.Height - 1)
 
 	err := newApp.LoadLatestVersion()
 	if err != nil {
@@ -115,13 +115,18 @@ func ExecuteStateless() []byte {
 	})
 
 	// commit
-	resp := app.Commit()
+	// resp := app.Commit()
+	appHash, err := app.cms.(*rootmulti.Store).GetAppHash()
+	if err != nil {
+		panic(err)
+	}
 
 	// output
-	return resp.Data
+	return appHash
 }
 
 func TestExecuteStateless(t *testing.T) {
+	randSource = 1
 	app := NewTestApp()
 	app.InitChain(abci.RequestInitChain{})
 	challengeHeihgt := int64(5)
@@ -136,6 +141,7 @@ func TestExecuteStateless(t *testing.T) {
 			agreedApphash = res.Data
 		}
 	}
+	fmt.Println("------------------------------------")
 
 	stateless.OracleS.Fun = func(key []byte) []byte {
 		u, err := url.Parse(string(key))
@@ -183,10 +189,10 @@ func TestExecuteStateless(t *testing.T) {
 		return nil
 	}
 
-	fmt.Printf("agreed app hash: %v\n", agreedApphash)
-	fmt.Printf("challenge app hash: %v\n", challengeApphash)
+	fmt.Printf("agreed app hash: %x\n", agreedApphash)
+	fmt.Printf("challenge app hash: %x\n", challengeApphash)
 
 	genHash := ExecuteStateless()
-	fmt.Fprint(os.Stdout, genHash)
+	fmt.Printf("reexcuted app hash: %x\n", genHash)
 	require.Equal(t, challengeApphash, genHash)
 }

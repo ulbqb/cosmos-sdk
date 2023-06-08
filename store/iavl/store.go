@@ -134,6 +134,7 @@ func (st *Store) GetImmutable(version int64) (*Store, error) {
 // Commit commits the current store state and returns a CommitID with the new
 // version and hash.
 func (st *Store) Commit() types.CommitID {
+	fmt.Println("commit!!")
 	defer telemetry.MeasureSince(time.Now(), "store", "iavl", "commit")
 
 	hash, version, err := st.tree.SaveVersion()
@@ -153,6 +154,8 @@ func (st *Store) LastCommitID() types.CommitID {
 	if err != nil {
 		panic(err)
 	}
+
+	fmt.Println(st.tree.Version(), st.tree.Version(), st.tree.Version(), st.tree.Version())
 
 	return types.CommitID{
 		Version: st.tree.Version(),
