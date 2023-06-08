@@ -127,7 +127,7 @@ func ExecuteStateless() []byte {
 }
 
 func TestExecuteStateless(t *testing.T) {
-	randSource = 3
+	randSource = 34895389534
 	app := NewTestApp()
 	app.InitChain(abci.RequestInitChain{})
 	challengeHeihgt := int64(5)
