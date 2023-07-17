@@ -31,6 +31,7 @@ type (
 		GetVersioned(key []byte, version int64) ([]byte, error)
 		GetVersionedWithProof(key []byte, version int64) ([]byte, *iavl.RangeProof, error)
 		GetImmutable(version int64) (*iavl.ImmutableTree, error)
+		GetKey(hash []byte, version int64) ([]byte, error)
 		SetInitialVersion(version uint64)
 		Iterator(start, end []byte, ascending bool) (types.Iterator, error)
 		LoadVersionForOverwriting(targetVersion int64) (int64, error)
@@ -94,6 +95,10 @@ func (it *immutableTree) GetImmutable(version int64) (*iavl.ImmutableTree, error
 	}
 
 	return it.ImmutableTree, nil
+}
+
+func (it *immutableTree) GetKey(hash []byte, version int64) ([]byte, error) {
+	panic("cannot call 'GetKey' on an immutable IAVL tree")
 }
 
 func (it *immutableTree) LoadVersionForOverwriting(targetVersion int64) (int64, error) {

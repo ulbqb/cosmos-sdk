@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	iavltree "github.com/cosmos/iavl"
 	"github.com/gogo/protobuf/proto"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto/tmhash"
@@ -806,4 +807,40 @@ func (app *BaseApp) runMsgs(ctx sdk.Context, msgs []sdk.Msg, mode runTxMode) (*s
 		Log:    strings.TrimSpace(msgLogs.String()),
 		Events: events.ToABCIEvents(),
 	}, nil
+}
+
+func (app *BaseApp) StatelessApp(version int64, oracle iavltree.OracleClientI) (*BaseApp, error) {
+	stateless := NewBaseApp(app.Name(), app.logger, dbm.NewMemDB(), app.txDecoder)
+
+	stateless.msgServiceRouter = app.msgServiceRouter
+	stateless.anteHandler = app.anteHandler
+	stateless.beginBlocker = app.beginBlocker
+	stateless.endBlocker = app.endBlocker
+
+	// stores are mounted
+	cms, ok := app.CommitMultiStore().(*rootmulti.Store)
+	if !ok {
+		return nil, errors.New("stateless application requires a rootmulti store")
+	}
+	kvStoreKeys := cms.GetKVStoreKeys()
+	stateless.MountKVStores(kvStoreKeys)
+	memStoreKeys := cms.GetMemStoreKeys()
+	stateless.MountMemoryStores(memStoreKeys)
+
+	// set param store
+	stateless.paramStore = app.paramStore
+
+	// set stateless store
+	statelessCms, ok := stateless.CommitMultiStore().(*rootmulti.Store)
+	if !ok {
+		return nil, errors.New("stateless application requires a rootmulti store")
+	}
+	statelessCms.SetStatelessTree(oracle, version-1)
+
+	err := stateless.LoadLatestVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	return stateless, err
 }

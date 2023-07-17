@@ -38,6 +38,13 @@ type Store struct {
 	tree Tree
 }
 
+// LoadStoreWithDeepIAVLTree returns an IAVL Store as a CommitKVStore with given deep tree.
+func LoadStoreWithStatelessTree(tree Tree) (types.CommitKVStore, error) {
+	return &Store{
+		tree: tree,
+	}, nil
+}
+
 // LoadStore returns an IAVL Store as a CommitKVStore. Internally, it will load the
 // store's version (id) from the provided DB. An error is returned if the version
 // fails to load, or if called with a positive version on an empty tree.
@@ -317,6 +324,44 @@ func (st *Store) Query(req abci.RequestQuery) (res abci.ResponseQuery) {
 	case "/key": // get by key
 		key := req.Data // data holds the key bytes
 
+		res.Key = key
+		if !st.VersionExists(res.Height) {
+			res.Log = iavl.ErrVersionDoesNotExist.Error()
+			break
+		}
+
+		value, err := tree.GetVersioned(key, res.Height)
+		if err != nil {
+			panic(err)
+		}
+		res.Value = value
+
+		if !req.Prove {
+			break
+		}
+
+		// Continue to prove existence/absence of value
+		// Must convert store.Tree to iavl.MutableTree with given version to use in CreateProof
+		iTree, err := tree.GetImmutable(res.Height)
+		if err != nil {
+			// sanity check: If value for given version was retrieved, immutable tree must also be retrievable
+			panic(fmt.Sprintf("version exists in store but could not retrieve corresponding versioned tree in store, %s", err.Error()))
+		}
+		mtree := &iavl.MutableTree{
+			ImmutableTree: iTree,
+		}
+
+		// get proof from tree and convert to merkle.Proof before adding to result
+		res.ProofOps = getProofFromTree(mtree, req.Data, res.Value != nil)
+
+	case "/node":
+		nodeHash := req.Data
+		key, err := tree.GetKey(nodeHash, req.Height)
+		if err != nil {
+			panic(err)
+		}
+
+		req.Data = key
 		res.Key = key
 		if !st.VersionExists(res.Height) {
 			res.Log = iavl.ErrVersionDoesNotExist.Error()
